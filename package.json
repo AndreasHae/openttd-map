@@ -1,11 +1,12 @@
 {
-  "name": "website",
+  "name": "openttd-viz",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
-    "start": "next",
+    "start": "concurrently -k 'npm run start:next' 'npm run start:rust'",
+    "start:next": "next dev",
+    "start:rust": "cd savegame-reader && chokidar src/**/*.rs -c 'wasm-pack build' --initial --debounce",
     "lint": "next lint",
     "format": "prettier --ignore-path .gitignore --write ."
   },
@@ -20,6 +21,8 @@
     "@types/react": "18.0.12",
     "@types/react-dom": "18.0.5",
     "autoprefixer": "^10.4.7",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^7.6.0",
     "eslint": "8.17.0",
     "eslint-config-next": "12.1.6",
     "postcss": "^8.4.14",
