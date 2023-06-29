@@ -16,10 +16,7 @@ pub fn load_file(path: &Path) {
 }
 
 fn check_version_support(file: &mut impl Read) {
-    let mut format = [0; 4];
-    file.read_exact(&mut format).unwrap();
-    let format = SaveFileFormat::from_bytes(&format);
-    match format {
+    match SaveFileFormat::read_from(file) {
         SaveFileFormat::Lzma => (),
         _ => panic!("Unsupported savegame format")
     }
@@ -38,6 +35,13 @@ enum SaveFileFormat {
 }
 
 impl SaveFileFormat {
+    fn read_from(reader: &mut impl Read) -> SaveFileFormat {
+        let mut format = [0; 4];
+        reader.read_exact(&mut format).unwrap();
+
+        SaveFileFormat::from_bytes(&format)
+    }
+
     fn from_bytes(bytes: &[u8; 4]) -> SaveFileFormat {
         match std::str::from_utf8(bytes).unwrap() {
             "OTTD" => SaveFileFormat::Lzo,
