@@ -2,9 +2,17 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use xz2::read::XzDecoder;
+
 pub fn load_file(path: &Path) {
     let mut file = File::open(path).unwrap();
     check_version_support(&mut file);
+
+    let mut decoder = XzDecoder::new(file);
+
+    let mut b: Vec<u8> = vec![];
+    decoder.read_to_end(&mut b).unwrap();
+    unsafe { println!("{}", String::from_utf8_unchecked(b)) }
 }
 
 fn check_version_support(file: &mut impl Read) {
