@@ -1,4 +1,4 @@
-use std::fs::{File};
+use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
@@ -7,15 +7,18 @@ pub fn load_file(path: &Path) {
     check_version_support(&mut file);
 }
 
-fn check_version_support(file: &mut File) {
-    let mut version = [0; 4];
-
-    file.read_exact(&mut version).unwrap();
-
-    let version = std::str::from_utf8(&version).unwrap();
+fn check_version_support(file: &mut impl Read) {
+    let mut format = [0; 4];
+    file.read_exact(&mut format).unwrap();
+    let version = std::str::from_utf8(&format).unwrap();
     if version != "OTTX" {
-        panic!("Unsupported savegame version")
+        panic!("Unsupported savegame format")
     }
+
+    let mut version = [0; 4];
+    file.read_exact(&mut version).unwrap();
+    let version = u32::from_be_bytes(version) >> 16;
+    println!("Savegame version {}", version)
 }
 
 #[cfg(test)]
