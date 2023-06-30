@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use byteorder::ReadBytesExt;
 use xz2::read::XzDecoder;
 
 pub fn load_file(path: &Path) {
@@ -10,9 +11,85 @@ pub fn load_file(path: &Path) {
 
     let mut decoder = XzDecoder::new(file);
 
-    let mut b: Vec<u8> = vec![];
-    decoder.read_to_end(&mut b).unwrap();
-    unsafe { println!("{}", String::from_utf8_unchecked(b)) }
+    let mut chunk_id = [0; 4];
+    decoder.read_exact(&mut chunk_id).unwrap();
+
+    println!("Loading chunk {}", chunk_id_from_bytes(&chunk_id));
+    let chunk_type = ChunkType::read_from(&mut decoder);
+    println!("Chunk type: {:?}", chunk_type);
+
+    if chunk_type.has_table_header() {
+        // SlIterateArray
+        // read array length
+        let array_length = read_array_length(&mut decoder);
+        println!("Length: {}", array_length);
+    }
+}
+
+fn get_bit_at(input: usize, n: u8) -> bool {
+    if n < 32 {
+        input & (1 << n) != 0
+    } else {
+        false
+    }
+}
+
+fn read_array_length(reader: &mut impl Read) -> usize {
+    let mut length = usize::from(reader.read_u8().unwrap());
+    if get_bit_at(length, 7) {
+        length &= !0b1000_0000;
+        if get_bit_at(length, 6) {
+            length &= !0b0100_0000;
+            if get_bit_at(length, 5) {
+                length &= !0b0010_0000;
+                if get_bit_at(length, 4) {
+                    length &= !0b0001_0000;
+                    if get_bit_at(length, 3) {
+                        panic!("Unsupported array length")
+                    }
+                    length = length << 8 | usize::from(reader.read_u8().unwrap());
+                }
+                length = length << 8 | usize::from(reader.read_u8().unwrap());
+            }
+            length = length << 8 | usize::from(reader.read_u8().unwrap());
+        }
+        length = length << 8 | usize::from(reader.read_u8().unwrap());
+    }
+    length
+}
+
+#[derive(Debug)]
+enum ChunkType {
+    Riff,
+    Array,
+    SparseArray,
+    Table,
+    SparseTable,
+}
+
+impl ChunkType {
+    fn read_from(reader: &mut impl Read) -> ChunkType {
+        const TYPE_MASK: u8 = 0xF;
+        match reader.read_u8().unwrap() & TYPE_MASK {
+            0 => ChunkType::Riff,
+            1 => ChunkType::Array,
+            2 => ChunkType::SparseArray,
+            3 => ChunkType::Table,
+            4 => ChunkType::SparseTable,
+            _ => panic!("Unknown chunk type")
+        }
+    }
+
+    fn has_table_header(&self) -> bool {
+        match self {
+            ChunkType::Table | ChunkType::SparseTable => true,
+            _ => false
+        }
+    }
+}
+
+fn chunk_id_from_bytes(bytes: &[u8; 4]) -> &str {
+    std::str::from_utf8(bytes).unwrap()
 }
 
 fn check_version_support(file: &mut impl Read) {
@@ -55,6 +132,7 @@ impl SaveFileFormat {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
     use crate::loader::load_file;
 
     #[test]
