@@ -23,7 +23,41 @@ pub fn load_file(path: &Path) {
         // read array length
         let array_length = read_array_length(&mut decoder);
         println!("Length: {}", array_length);
+        let fields = read_table_header(&mut decoder);
+        println!("Fields: {:?}", fields)
     }
+}
+
+fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
+    let mut fields = vec![];
+    loop {
+        let data_type = reader.read_u8().unwrap();
+        if data_type == 0 {
+            break;
+        }
+
+        let key = read_str(reader);
+        fields.push(Field { key, data_type });
+    }
+    fields
+}
+
+#[derive(Debug)]
+struct Field {
+    key: String,
+    data_type: u8,
+}
+
+fn read_conv(reader: &mut impl Read) {
+    reader.read_u8().unwrap();
+}
+
+fn read_str(reader: &mut impl Read) -> String {
+    let length = read_array_length(reader);
+    let mut buf = vec![0; length];
+    reader.read_exact(&mut buf).unwrap();
+
+    String::from(std::str::from_utf8(&buf).unwrap())
 }
 
 fn get_bit_at(input: usize, n: u8) -> bool {
