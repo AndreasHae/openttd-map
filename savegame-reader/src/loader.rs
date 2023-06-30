@@ -24,7 +24,7 @@ pub fn load_file(path: &Path) {
         let array_length = read_array_length(&mut decoder);
         println!("Length: {}", array_length);
         let fields = read_table_header(&mut decoder);
-        println!("Fields: {:?}", fields)
+        println!("Fields: {:#?}", fields)
     }
 }
 
@@ -37,7 +37,23 @@ fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
         }
 
         let key = read_str(reader);
-        fields.push(Field { key, data_type });
+        fields.push(Field {
+            key,
+            data_type,
+            children: None,
+        });
+    }
+    for field in fields.as_mut_slice() {
+        if field.data_type == 27 {
+            drop(std::mem::replace(
+                field,
+                Field {
+                    key: field.key.clone(),
+                    data_type: field.data_type,
+                    children: Some(read_table_header(reader)),
+                },
+            ))
+        }
     }
     fields
 }
@@ -46,6 +62,7 @@ fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
 struct Field {
     key: String,
     data_type: u8,
+    children: Option<Vec<Field>>,
 }
 
 fn read_conv(reader: &mut impl Read) {
@@ -110,14 +127,14 @@ impl ChunkType {
             2 => ChunkType::SparseArray,
             3 => ChunkType::Table,
             4 => ChunkType::SparseTable,
-            _ => panic!("Unknown chunk type")
+            _ => panic!("Unknown chunk type"),
         }
     }
 
     fn has_table_header(&self) -> bool {
         match self {
             ChunkType::Table | ChunkType::SparseTable => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -129,7 +146,7 @@ fn chunk_id_from_bytes(bytes: &[u8; 4]) -> &str {
 fn check_version_support(file: &mut impl Read) {
     match SaveFileFormat::read_from(file) {
         SaveFileFormat::Lzma => (),
-        _ => panic!("Unsupported savegame format")
+        _ => panic!("Unsupported savegame format"),
     }
 
     let mut version = [0; 4];
@@ -158,7 +175,7 @@ impl SaveFileFormat {
             "OTTD" => SaveFileFormat::Lzo,
             "OTTZ" => SaveFileFormat::Zlib,
             "OTTX" => SaveFileFormat::Lzma,
-            _ => SaveFileFormat::Unknown
+            _ => SaveFileFormat::Unknown,
         }
     }
 }
@@ -171,6 +188,8 @@ mod tests {
 
     #[test]
     fn testy() {
-        load_file(Path::new("/Users/andreas/Projects/personal/openttd-viz/savegame-reader/test.sav"))
+        load_file(Path::new(
+            "/Users/andreas/Projects/personal/openttd-viz/savegame-reader/test.sav",
+        ))
     }
 }
