@@ -31,25 +31,25 @@ pub fn load_file(path: &Path) {
 fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     let mut fields = vec![];
     loop {
-        let data_type = reader.read_u8().unwrap();
-        if data_type == 0 {
+        let var_type = VarType::from_byte(reader.read_u8().unwrap());
+        if var_type.data_type == DataType::FileEnd {
             break;
         }
 
         let key = read_str(reader);
         fields.push(Field {
             key,
-            data_type,
+            var_type,
             children: None,
         });
     }
     for field in fields.as_mut_slice() {
-        if field.data_type == 27 {
+        if field.var_type.data_type == DataType::Struct {
             drop(std::mem::replace(
                 field,
                 Field {
                     key: field.key.clone(),
-                    data_type: field.data_type,
+                    var_type: field.var_type.clone(),
                     children: Some(read_table_header(reader)),
                 },
             ))
@@ -61,8 +61,59 @@ fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
 #[derive(Debug)]
 struct Field {
     key: String,
-    data_type: u8,
+    var_type: VarType,
     children: Option<Vec<Field>>,
+}
+
+#[derive(Debug, Clone)]
+struct VarType {
+    data_type: DataType,
+    has_length_field: bool,
+}
+
+impl VarType {
+    fn from_byte(byte: u8) -> VarType {
+        VarType {
+            data_type: DataType::from_byte(byte & 0b0000_1111),
+            has_length_field: get_bit_at(usize::from(byte), 4),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum DataType {
+    FileEnd = 0,
+    I8 = 1,
+    U8 = 2,
+    I16 = 3,
+    U16 = 4,
+    I32 = 5,
+    U32 = 6,
+    I64 = 7,
+    U64 = 8,
+    StringId = 9,
+    String = 10,
+    Struct = 11,
+}
+
+impl DataType {
+    fn from_byte(byte: u8) -> DataType {
+        match byte {
+            0 => DataType::FileEnd,
+            1 => DataType::I8,
+            2 => DataType::U8,
+            3 => DataType::I16,
+            4 => DataType::U16,
+            5 => DataType::I32,
+            6 => DataType::U32,
+            7 => DataType::I64,
+            8 => DataType::U64,
+            9 => DataType::StringId,
+            10 => DataType::String,
+            11 => DataType::Struct,
+            _ => panic!("tried to map {} to DataType", byte),
+        }
+    }
 }
 
 fn read_conv(reader: &mut impl Read) {
