@@ -29,7 +29,7 @@ pub fn load_file(path: &Path) {
             let table_header_length = read_array_length(&mut decoder);
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
-            // println!("Fields in header: {:#?}", fields);
+            println!("Fields in header: {:#?}", fields);
             let obj_length = read_array_length(&mut decoder);
             println!("Object length: {} bytes", obj_length);
             skip_bytes(&mut decoder, obj_length);
