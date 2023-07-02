@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-use byteorder::ReadBytesExt;
+use byteorder::{BigEndian, ReadBytesExt};
 use xz2::read::XzDecoder;
 
 pub fn load_file(path: &Path) {
@@ -29,15 +29,22 @@ pub fn load_file(path: &Path) {
             let table_header_length = read_array_length(&mut decoder);
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
-            println!("Fields in header: {:#?}", fields);
+            // println!("Fields in header: {:#?}", fields);
             let obj_length = read_array_length(&mut decoder);
             println!("Object length: {} bytes", obj_length);
             skip_bytes(&mut decoder, obj_length);
         }
+        if chunk_type == ChunkType::Riff {
+            let mut length = usize::from(decoder.read_u8().unwrap()) << 16;
+            length += usize::from(decoder.read_u16::<BigEndian>().unwrap());
+            println!("Riff length: {}", length);
+            skip_bytes(&mut decoder, length);
+        }
+        println!()
     }
 }
 
-fn skip_bytes(decoder: &mut XzDecoder<File>, bytes: usize) {
+fn skip_bytes(decoder: &mut impl Read, bytes: usize) {
     let mut buf = vec![0; bytes];
     decoder.read_exact(&mut buf).unwrap();
 }
@@ -174,7 +181,7 @@ fn read_array_length(reader: &mut impl Read) -> usize {
     length
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum ChunkType {
     Riff,
     Array,
