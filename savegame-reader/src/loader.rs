@@ -11,21 +11,35 @@ pub fn load_file(path: &Path) {
 
     let mut decoder = XzDecoder::new(file);
 
-    let mut chunk_id = [0; 4];
-    decoder.read_exact(&mut chunk_id).unwrap();
+    loop {
+        let mut chunk_id = [0; 4];
+        decoder.read_exact(&mut chunk_id).unwrap();
 
-    println!("Loading chunk {}", chunk_id_from_bytes(&chunk_id));
-    let chunk_type = ChunkType::read_from(&mut decoder);
-    println!("Chunk type: {:?}", chunk_type);
+        if u32::from_be_bytes(chunk_id) == 0 {
+            break;
+        }
 
-    if chunk_type.has_table_header() {
-        // SlIterateArray
-        // read array length
-        let array_length = read_array_length(&mut decoder);
-        println!("Length: {}", array_length);
-        let fields = read_table_header(&mut decoder);
-        println!("Fields: {:#?}", fields)
+        println!("Loading chunk {}", chunk_id_from_bytes(&chunk_id));
+        let chunk_type = ChunkType::read_from(&mut decoder);
+        println!("Chunk type: {:?}", chunk_type);
+
+        if chunk_type.has_table_header() {
+            // SlIterateArray
+            // read array length
+            let table_header_length = read_array_length(&mut decoder);
+            println!("Table header length: {} bytes", table_header_length);
+            let fields = read_table_header(&mut decoder);
+            println!("Fields in header: {:#?}", fields);
+            let obj_length = read_array_length(&mut decoder);
+            println!("Object length: {} bytes", obj_length);
+            skip_bytes(&mut decoder, obj_length);
+        }
     }
+}
+
+fn skip_bytes(decoder: &mut XzDecoder<File>, bytes: usize) {
+    let mut buf = vec![0; bytes];
+    decoder.read_exact(&mut buf).unwrap();
 }
 
 fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
