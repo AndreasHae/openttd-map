@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use crate::loader::ChunkType::{Riff, SparseTable, Table};
 use byteorder::{BigEndian, ReadBytesExt};
 use xz2::read::XzDecoder;
 
@@ -29,10 +30,28 @@ pub fn load_file(path: &Path) {
             let table_header_length = read_array_length(&mut decoder);
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
-            println!("Fields in header: {:#?}", fields);
-            let obj_length = read_array_length(&mut decoder);
-            println!("Object length: {} bytes", obj_length);
-            skip_bytes(&mut decoder, obj_length);
+            // println!("Fields in header: {:#?}", fields);
+
+            if chunk_type == Table {
+                let obj_length = read_array_length(&mut decoder);
+                println!("Object length: {} bytes", obj_length);
+                skip_bytes(&mut decoder, obj_length);
+            }
+
+            if chunk_type == SparseTable {
+                loop {
+                    let mut obj_length = read_array_length(&mut decoder);
+                    if obj_length == 0 {
+                        break;
+                    }
+                    obj_length -= 2;
+
+                    println!("Object length: {} bytes", obj_length);
+                    let index = read_array_length(&mut decoder);
+                    println!("Index: {}", index);
+                    skip_bytes(&mut decoder, obj_length);
+                }
+            }
         }
         if chunk_type == ChunkType::Riff {
             let mut length = usize::from(decoder.read_u8().unwrap()) << 16;
