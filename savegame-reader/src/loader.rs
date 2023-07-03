@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use crate::base_readers::{has_bit, read_array_length, read_str};
 use byteorder::{BigEndian, ReadBytesExt};
 use xz2::read::XzDecoder;
 
@@ -124,7 +125,7 @@ impl VarType {
     fn from_byte(byte: u8) -> VarType {
         VarType {
             data_type: DataType::from_byte(byte & 0b0000_1111),
-            has_length_field: get_bit_at(usize::from(byte), 4),
+            has_length_field: has_bit(usize::from(byte), 4),
         }
     }
 }
@@ -163,50 +164,6 @@ impl DataType {
             _ => panic!("tried to map {} to DataType", byte),
         }
     }
-}
-
-fn read_conv(reader: &mut impl Read) {
-    reader.read_u8().unwrap();
-}
-
-fn read_str(reader: &mut impl Read) -> String {
-    let length = read_array_length(reader);
-    let mut buf = vec![0; length];
-    reader.read_exact(&mut buf).unwrap();
-
-    String::from(std::str::from_utf8(&buf).unwrap())
-}
-
-fn get_bit_at(input: usize, n: u8) -> bool {
-    if n < 32 {
-        input & (1 << n) != 0
-    } else {
-        false
-    }
-}
-
-fn read_array_length(reader: &mut impl Read) -> usize {
-    let mut length = usize::from(reader.read_u8().unwrap());
-    if get_bit_at(length, 7) {
-        length &= !0b1000_0000;
-        if get_bit_at(length, 6) {
-            length &= !0b0100_0000;
-            if get_bit_at(length, 5) {
-                length &= !0b0010_0000;
-                if get_bit_at(length, 4) {
-                    length &= !0b0001_0000;
-                    if get_bit_at(length, 3) {
-                        panic!("Unsupported array length")
-                    }
-                    length = length << 8 | usize::from(reader.read_u8().unwrap());
-                }
-                length = length << 8 | usize::from(reader.read_u8().unwrap());
-            }
-            length = length << 8 | usize::from(reader.read_u8().unwrap());
-        }
-        length = length << 8 | usize::from(reader.read_u8().unwrap());
-    }
-    length
 }
 
 #[derive(Debug, Eq, PartialEq)]
