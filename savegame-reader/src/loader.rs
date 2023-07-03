@@ -30,12 +30,22 @@ pub fn load_file(path: &Path) {
             let table_header_length = read_array_length(&mut decoder);
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
-            // println!("Fields in header: {:#?}", fields);
+            println!("Fields in header: {:#?}", fields);
 
             if chunk_type == Table {
-                let obj_length = read_array_length(&mut decoder);
-                println!("Object length: {} bytes", obj_length);
-                skip_bytes(&mut decoder, obj_length);
+                let mut index = 0usize;
+                loop {
+                    let mut obj_length = read_array_length(&mut decoder);
+                    if obj_length == 0 {
+                        break;
+                    }
+                    obj_length -= 1;
+
+                    println!("Object length: {} bytes", obj_length);
+                    index += 1;
+                    println!("Index: {}", index);
+                    skip_bytes(&mut decoder, obj_length);
+                }
             }
 
             if chunk_type == SparseTable {
