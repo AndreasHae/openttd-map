@@ -1,45 +1,38 @@
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::path::Path;
 
 use byteorder::{BigEndian, ReadBytesExt};
 
-use crate::base_readers::read_gamma;
-use crate::header::SaveFileHeader;
+use crate::save_file::SaveFile;
 use crate::table_reader::{read_sparse_table, read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
-pub fn load_file(path: &Path) {
-    let mut file = File::open(path).unwrap();
-    let header = SaveFileHeader::read_from(&mut file);
-    println!("{:?}", header);
 
-    // let mut decoder = header.format.get_decoder(file);
-    let mut decoder = File::open("test-big.sav.decoded").unwrap();
-
+pub fn load_file(mut save_file: impl SaveFile + Seek) {
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
     loop {
         let mut chunk_id = [0; 4];
-        decoder.read_exact(&mut chunk_id).unwrap();
+        save_file.read_exact(&mut chunk_id).unwrap();
+
         if u32::from_be_bytes(chunk_id) == 0 {
             break;
         }
 
         let chunk_id = chunk_id_from_bytes(&chunk_id);
         println!("Loading chunk {}", chunk_id);
-        let chunk_type = ChunkType::read_from(&mut decoder);
+        let chunk_type = ChunkType::read_from(&mut save_file);
         println!("Chunk type: {:?}", chunk_type);
+        println!("{}", save_file.debug_info());
 
         if chunk_type.has_table_header() {
             // SlIterateArray
             // read array length
-            let table_header_length = read_gamma(&mut decoder);
+            let table_header_length = save_file.read_gamma();
             assert!(table_header_length > 0, "table header size was 0");
             // println!("Table header length: {} bytes", table_header_length);
-            let fields = read_table_header(&mut decoder);
+            let fields = read_table_header(&mut save_file);
             // println!("Fields in header: {:#?}", fields);
 
             if chunk_id == "ORDR" {
@@ -49,23 +42,23 @@ pub fn load_file(path: &Path) {
             match chunk_type {
                 ChunkType::Table => {
                     if chunk_id == "ORDR" {
-                        println!("{}", decoder.seek(SeekFrom::Current(0)).unwrap());
+                        println!("{}", save_file.seek(SeekFrom::Current(0)).unwrap());
                     }
-                    let items = read_table(&mut decoder, fields);
+                    let items = read_table(&mut save_file, fields);
                     chunks.insert(String::from(chunk_id), items);
                 }
                 ChunkType::SparseTable => {
-                    let items = read_sparse_table(&mut decoder, fields);
+                    let items = read_sparse_table(&mut save_file, fields);
                     chunks.insert(String::from(chunk_id), items);
                 }
                 _ => panic!("unexpected chunk type {:?}", chunk_type),
             }
         }
         if chunk_type == ChunkType::Riff {
-            let mut length = usize::from(decoder.read_u8().unwrap()) << 16;
-            length += usize::from(decoder.read_u16::<BigEndian>().unwrap());
+            let mut length = usize::from(save_file.read_u8().unwrap()) << 16;
+            length += usize::from(save_file.read_u16::<BigEndian>().unwrap());
             println!("Riff length: {}", length);
-            skip_bytes(&mut decoder, length);
+            skip_bytes(&mut save_file, length);
         }
         println!();
     }
@@ -75,9 +68,9 @@ pub fn load_file(path: &Path) {
     // File::create(Path::new("./out.json")).unwrap().write(serde_json::to_string(&chunks.keys().collect()).unwrap().as_bytes());
 }
 
-fn skip_bytes(decoder: &mut impl Read, bytes: usize) {
+fn skip_bytes(save_file: &mut impl Read, bytes: usize) {
     let mut buf = vec![0; bytes];
-    decoder.read_exact(&mut buf).unwrap();
+    save_file.read_exact(&mut buf).unwrap();
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -114,14 +107,93 @@ fn chunk_id_from_bytes(bytes: &[u8; 4]) -> &str {
     std::str::from_utf8(bytes).unwrap()
 }
 
+fn chunk_name_of(chunk_id: &str) -> &str {
+    match chunk_id {
+        "AIPL" => "AI companies",
+        "ANIT" => "Animated tiles",
+        "ERNW" => "Engine renewal",
+        "CMDL" => "Cargo deliveries",
+        "CMPU" => "Cargo pickups",
+        "CAPA" => "Cargo packets",
+        "CHTS" => "Cheats used",
+        "PLYR" => "Player companies",
+        "DEPT" => "Depots",
+        "PRIC" => "Prices",
+        "CAPR" => "Cargo payment rates (only in pre 126 savegames)",
+        "ECMY" => "Economy variables",
+        "CAPY" => "Cargo payments",
+        "ENGN" => "Engines",
+        "ENGS" => "Engine ID mappings (legacy)",
+        "EIDS" => "Engine ID mappings",
+        "GSDT" => "Game script configs",
+        "GSTR" => "Game strings",
+        "GLOG" => "Game log",
+        "GOAL" => "Goals",
+        "GRPS" => "Groups (of vehicles?)",
+        "INDY" => "Industries",
+        "IBLD" => "Industry builder",
+        "ITBL" => "Industry type build data",
+        "RAIL" => "Rail type labels",
+        "LEAE" => "League table elements",
+        "LEAT" => "League tables",
+        "LGRP" => "Link graphs",
+        "LGRJ" => "Link graph jobs",
+        "LGRS" => "Link graph schedule",
+        "MAPS" => "Map size",
+        "MAPT" => "Map tile types",
+        "MAPH" => "Map tile heights",
+        "MAPO" => "Map tile ownership information",
+        "MAP2" => "Map tile indices of towns, industries and stations",
+        "M3LO" => "Map tile general purpose",
+        "M3HI" => "Map tile general purpose",
+        "MAP5" => "Map tile general purpose",
+        "MAPE" => "Map tile general purpose",
+        "MAP7" => "Map tile NewGRF support",
+        "MAP8" => "Map tile general purpose",
+        "DATE" => "Ingame date",
+        "VIEW" => "Viewport info",
+        "NGRF" => "Loaded NewGRFs",
+        "OBJS" => "Map objects",
+        "ORDR" => "Orders",
+        "ORDL" => "Order lists",
+        "BKOR" => "Order backups",
+        "OPTS" => "Settings (legacy)",
+        "PATS" => "Settings",
+        "SIGN" => "Signs",
+        "STNS" => "Stations (legacy)",
+        "STNN" => "Stations",
+        "ROAD" => "Road stops",
+        "PSAC" => "Persistent storage",
+        "STPE" => "Story page elements",
+        "STPA" => "Story pages",
+        "NAME" => "Old names (legacy)",
+        "SUBS" => "Subsidies",
+        "CITY" => "Towns",
+        "VEHS" => "Vehicles",
+        "CHKP" => "Waypoints (legacy)",
+        "ATID" => "_airporttile_mngr",
+        "APID" => "_airport_mngr",
+        "IIDS" => "_industry_mngr",
+        "TIDS" => "_industile_mngr",
+        "OBID" => "_object_mngr",
+        "HIDS" => "_house_mngr",
+        _ => panic!("Unknown chunk id: {}", chunk_id),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs::File;
 
     use crate::loader::load_file;
+    use crate::save_file::DebugSaveFile;
 
     #[test]
     fn testy() {
-        load_file(Path::new("./test-big.sav"))
+        let file = File::open("./test-big.sav.decoded").unwrap();
+        let save_file = DebugSaveFile::new_from_decoded(file);
+        // let file = File::open("test_empty_map.sav").unwrap();
+        // let save_file = CompressedSaveFile::new(file);
+        load_file(save_file)
     }
 }

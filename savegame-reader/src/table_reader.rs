@@ -1,10 +1,11 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{BigEndian, ReadBytesExt};
-use serde::{Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{Serialize, Serializer};
 
-use crate::base_readers::{has_bit, read_gamma, read_str};
+use crate::common::has_bit;
+use crate::save_file::SaveFile;
 
 #[derive(Debug)]
 pub struct TableItem(pub Vec<ParsedField>);
@@ -92,14 +93,14 @@ impl Serialize for ParsedFieldContent {
     }
 }
 
-pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
+pub fn read_table_header(reader: &mut impl SaveFile) -> Vec<Field> {
     let mut fields = vec![];
     loop {
         let var_type = VarType::from_byte(reader.read_u8().unwrap());
         match var_type {
             None => break,
             Some(var_type) => {
-                let key = read_str(reader);
+                let key = reader.read_string();
                 fields.push(Field {
                     key,
                     var_type,
@@ -123,11 +124,11 @@ pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     fields
 }
 
-pub fn read_table(decoder: &mut (impl Read + Seek), fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_table(decoder: &mut (impl SaveFile + Seek), fields: Vec<Field>) -> Vec<TableItem> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
-        let mut size = read_gamma(decoder);
+        let mut size = decoder.read_gamma();
         if size == 0 {
             break;
         }
@@ -157,18 +158,18 @@ pub fn read_table(decoder: &mut (impl Read + Seek), fields: Vec<Field>) -> Vec<T
     parsed_items
 }
 
-pub fn read_sparse_table(decoder: &mut impl Read, fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_sparse_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec<TableItem> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
-        let mut size = read_gamma(decoder);
+        let mut size = decoder.read_gamma();
         if size == 0 {
             break;
         }
         size -= 1;
 
         println!("Object length: {} bytes", size);
-        index = read_gamma(decoder);
+        index = decoder.read_gamma();
         println!("Index: {}", index);
 
         let parsed_fields: TableItem = TableItem(
@@ -190,10 +191,10 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn parse_from(&self, reader: &mut impl Read) -> ParsedField {
+    pub fn parse_from(&self, reader: &mut impl SaveFile) -> ParsedField {
         let data = match &self.var_type {
             VarType::List(data_type) => {
-                let length = read_gamma(reader);
+                let length = reader.read_gamma();
                 let mut items = vec![];
                 for i in 0..length {
                     let value = if let Some(children) = &self.children {

@@ -1,8 +1,9 @@
-mod base_readers;
-mod loader;
-mod utils;
+mod common;
 mod header;
+mod loader;
+mod save_file;
 mod table_reader;
+mod utils;
 
 use wasm_bindgen::prelude::*;
 
