@@ -4,7 +4,7 @@ use std::path::Path;
 
 use byteorder::{BigEndian, ReadBytesExt};
 
-use crate::base_readers::{has_bit, read_array_length, read_str};
+use crate::base_readers::{has_bit, read_gamma, read_str};
 use crate::header::SaveFileHeader;
 
 pub fn load_file(path: &Path) {
@@ -29,7 +29,7 @@ pub fn load_file(path: &Path) {
         if chunk_type.has_table_header() {
             // SlIterateArray
             // read array length
-            let table_header_length = read_array_length(&mut decoder);
+            let table_header_length = read_gamma(&mut decoder);
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
             println!("Fields in header: {:#?}", fields);
@@ -37,7 +37,7 @@ pub fn load_file(path: &Path) {
             if chunk_type == ChunkType::Table {
                 let mut index = 0usize;
                 loop {
-                    let mut obj_length = read_array_length(&mut decoder);
+                    let mut obj_length = read_gamma(&mut decoder);
                     if obj_length == 0 {
                         break;
                     }
@@ -52,14 +52,14 @@ pub fn load_file(path: &Path) {
 
             if chunk_type == ChunkType::SparseTable {
                 loop {
-                    let mut obj_length = read_array_length(&mut decoder);
+                    let mut obj_length = read_gamma(&mut decoder);
                     if obj_length == 0 {
                         break;
                     }
                     obj_length -= 2;
 
                     println!("Object length: {} bytes", obj_length);
-                    let index = read_array_length(&mut decoder);
+                    let index = read_gamma(&mut decoder);
                     println!("Index: {}", index);
                     skip_bytes(&mut decoder, obj_length);
                 }

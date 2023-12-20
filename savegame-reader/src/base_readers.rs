@@ -7,7 +7,7 @@ pub fn read_conv(reader: &mut impl Read) {
 }
 
 pub fn read_str(reader: &mut impl Read) -> String {
-    let length = read_array_length(reader);
+    let length = read_gamma(reader);
     let mut buf = vec![0; length];
     reader.read_exact(&mut buf).unwrap();
 
@@ -26,7 +26,7 @@ pub fn has_bit(input: usize, n: u8) -> bool {
     input & (1 << n) != 0
 }
 
-pub fn read_array_length(reader: &mut impl Read) -> usize {
+pub fn read_gamma(reader: &mut impl Read) -> usize {
     let mut length = usize::from(reader.read_u8().unwrap());
     if has_bit(length, 7) {
         length &= !0b1000_0000;
@@ -48,4 +48,18 @@ pub fn read_array_length(reader: &mut impl Read) -> usize {
         length = length << 8 | usize::from(reader.read_u8().unwrap());
     }
     length
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::base_readers::read_gamma;
+
+    #[test]
+    fn test_read_gamma() {
+        assert_eq!(read_gamma(&mut [0b01000000].as_slice()), 64);
+        assert_eq!(read_gamma(&mut [0b10100000, 0b00000000].as_slice()), 8192);
+        assert_eq!(read_gamma(&mut [0b11010000, 0b00000000, 0b00000000].as_slice()), 1048576);
+        assert_eq!(read_gamma(&mut [0b11101000, 0b00000000, 0b00000000, 0b00000000].as_slice()), 134217728);
+        assert_eq!(read_gamma(&mut [0b11101000, 0b10000000, 0b10000000, 0b10000000].as_slice()), 142639232);
+    }
 }
