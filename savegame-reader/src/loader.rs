@@ -2,15 +2,17 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-use crate::base_readers::{has_bit, read_array_length, read_str};
 use byteorder::{BigEndian, ReadBytesExt};
-use xz2::read::XzDecoder;
+
+use crate::base_readers::{has_bit, read_array_length, read_str};
+use crate::header::SaveFileHeader;
 
 pub fn load_file(path: &Path) {
     let mut file = File::open(path).unwrap();
-    check_version_support(&mut file);
+    let header = SaveFileHeader::read_from(&mut file);
+    println!("{:?}", header);
 
-    let mut decoder = XzDecoder::new(file);
+    let mut decoder = header.format.get_decoder(file);
 
     loop {
         let mut chunk_id = [0; 4];
@@ -198,43 +200,6 @@ impl ChunkType {
 
 fn chunk_id_from_bytes(bytes: &[u8; 4]) -> &str {
     std::str::from_utf8(bytes).unwrap()
-}
-
-fn check_version_support(file: &mut impl Read) {
-    match SaveFileFormat::read_from(file) {
-        SaveFileFormat::Lzma => (),
-        _ => panic!("Unsupported savegame format"),
-    }
-
-    let mut version = [0; 4];
-    file.read_exact(&mut version).unwrap();
-    let version = u32::from_be_bytes(version) >> 16;
-    println!("Savegame version {}", version)
-}
-
-enum SaveFileFormat {
-    Lzo,
-    Zlib,
-    Lzma,
-    Unknown,
-}
-
-impl SaveFileFormat {
-    fn read_from(reader: &mut impl Read) -> SaveFileFormat {
-        let mut format = [0; 4];
-        reader.read_exact(&mut format).unwrap();
-
-        SaveFileFormat::from_bytes(&format)
-    }
-
-    fn from_bytes(bytes: &[u8; 4]) -> SaveFileFormat {
-        match std::str::from_utf8(bytes).unwrap() {
-            "OTTD" => SaveFileFormat::Lzo,
-            "OTTZ" => SaveFileFormat::Zlib,
-            "OTTX" => SaveFileFormat::Lzma,
-            _ => SaveFileFormat::Unknown,
-        }
-    }
 }
 
 #[cfg(test)]

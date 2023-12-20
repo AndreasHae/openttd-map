@@ -1,6 +1,7 @@
 mod base_readers;
 mod loader;
 mod utils;
+mod header;
 
 use wasm_bindgen::prelude::*;
 
