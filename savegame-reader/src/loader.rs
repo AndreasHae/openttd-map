@@ -245,8 +245,6 @@ mod tests {
 
     #[test]
     fn testy() {
-        load_file(Path::new(
-            "/Users/andreas/Projects/personal/openttd-viz/savegame-reader/test.sav",
-        ))
+        load_file(Path::new("./test-big.sav"))
     }
 }
