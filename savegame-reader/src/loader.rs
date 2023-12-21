@@ -17,12 +17,12 @@ pub fn load_file(path: &Path) {
     loop {
         let mut chunk_id = [0; 4];
         decoder.read_exact(&mut chunk_id).unwrap();
-
         if u32::from_be_bytes(chunk_id) == 0 {
             break;
         }
 
-        println!("Loading chunk {}", chunk_id_from_bytes(&chunk_id));
+        let chunk_id = chunk_id_from_bytes(&chunk_id);
+        println!("Loading chunk {}", chunk_id);
         let chunk_type = ChunkType::read_from(&mut decoder);
         println!("Chunk type: {:?}", chunk_type);
 
@@ -30,6 +30,7 @@ pub fn load_file(path: &Path) {
             // SlIterateArray
             // read array length
             let table_header_length = read_gamma(&mut decoder);
+            assert!(table_header_length > 0, "table header size was 0");
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
             println!("Fields in header: {:#?}", fields);
@@ -37,16 +38,23 @@ pub fn load_file(path: &Path) {
             if chunk_type == ChunkType::Table {
                 let mut index = 0usize;
                 loop {
-                    let mut obj_length = read_gamma(&mut decoder);
-                    if obj_length == 0 {
+                    let mut size = read_gamma(&mut decoder);
+                    if size == 0 {
                         break;
                     }
-                    obj_length -= 1;
+                    size -= 1;
 
-                    println!("Object length: {} bytes", obj_length);
+                    println!("Object length: {} bytes", size);
                     index += 1;
                     println!("Index: {}", index);
-                    skip_bytes(&mut decoder, obj_length);
+
+                    if chunk_id == "GLOG" {
+                        for field in &fields {
+                            println!("{:?}", field.parse_from(&mut decoder));
+                        }
+                    } else {
+                        skip_bytes(&mut decoder, size);
+                    }
                 }
             }
 
@@ -75,6 +83,34 @@ pub fn load_file(path: &Path) {
     }
 }
 
+#[derive(Debug)]
+struct ParsedField {
+    key: String,
+    data: ParsedFieldData,
+}
+
+#[derive(Debug)]
+enum ParsedFieldData {
+    Scalar(ParsedFieldContent),
+    List(Vec<ParsedFieldContent>),
+}
+
+#[derive(Debug)]
+enum ParsedFieldContent {
+    FileEnd,
+    I8(i8),
+    U8(u8),
+    I16(i16),
+    U16(u16),
+    I32(i32),
+    U32(u32),
+    I64(i64),
+    U64(u64),
+    StringId,
+    String,
+    Struct(Vec<ParsedField>),
+}
+
 fn skip_bytes(decoder: &mut impl Read, bytes: usize) {
     let mut buf = vec![0; bytes];
     decoder.read_exact(&mut buf).unwrap();
@@ -83,28 +119,24 @@ fn skip_bytes(decoder: &mut impl Read, bytes: usize) {
 fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     let mut fields = vec![];
     loop {
-        let var_type = VarType::from_byte(reader.read_u8().unwrap());
-        if var_type.data_type == DataType::FileEnd {
-            break;
-        }
-
-        let key = read_str(reader);
-        fields.push(Field {
-            key,
-            var_type,
-            children: None,
-        });
-    }
-    for field in fields.as_mut_slice() {
-        if field.var_type.data_type == DataType::Struct {
-            drop(std::mem::replace(
-                field,
-                Field {
-                    key: field.key.clone(),
-                    var_type: field.var_type.clone(),
-                    children: Some(read_table_header(reader)),
-                },
-            ))
+        match VarType::from_byte(reader.read_u8().unwrap()) {
+            None => break,
+            Some(var_type) => {
+                let key = read_str(reader);
+                fields.push(if var_type.data_type() == DataType::Struct {
+                    Field {
+                        key,
+                        var_type,
+                        children: Some(read_table_header(reader)),
+                    }
+                } else {
+                    Field {
+                        key,
+                        var_type,
+                        children: None,
+                    }
+                })
+            }
         }
     }
     fields
@@ -117,35 +149,91 @@ struct Field {
     children: Option<Vec<Field>>,
 }
 
+impl Field {
+    fn parse_from(&self, reader: &mut impl Read) -> ParsedField {
+        let data = match &self.var_type {
+            VarType::List(data_type) => {
+                let length = read_gamma(reader);
+                let mut items = vec![];
+                for i in 0..length {
+                    let value = if let Some(children) = &self.children {
+                        let mut parsed_children = vec![];
+                        for child_field in children {
+                            parsed_children.push(child_field.parse_from(reader));
+                        }
+                        ParsedFieldContent::Struct(parsed_children)
+                    } else {
+                        data_type.read_from(reader)
+                    };
+                    items.push(value);
+                }
+                ParsedFieldData::List(items)
+            }
+            VarType::Scalar(data_type) => {
+                let content = if let Some(children) = &self.children {
+                    let mut parsed_children: Vec<ParsedField> = vec![];
+                    for child_field in children {
+                        parsed_children.push(child_field.parse_from(reader));
+                    }
+                    ParsedFieldContent::Struct(parsed_children)
+                } else {
+                    data_type.read_from(reader)
+                };
+                ParsedFieldData::Scalar(content)
+            }
+        };
+
+        ParsedField {
+            key: self.key.clone(),
+            data,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-struct VarType {
-    data_type: DataType,
-    has_length_field: bool,
+enum VarType {
+    Scalar(DataType),
+    List(DataType),
 }
 
 impl VarType {
-    fn from_byte(byte: u8) -> VarType {
-        VarType {
-            data_type: DataType::from_byte(byte & 0b0000_1111),
-            has_length_field: has_bit(usize::from(byte), 4),
+    fn from_byte(byte: u8) -> Option<VarType> {
+        if byte == 0 {
+            return None;
+        }
+
+        let data_type = DataType::from_byte(byte & 0b0000_1111);
+        let has_length_field = has_bit(usize::from(byte), 4);
+
+        if has_length_field {
+            Some(VarType::List(data_type))
+        } else {
+            Some(VarType::Scalar(data_type))
+        }
+    }
+
+    fn data_type(&self) -> DataType {
+        match self {
+            VarType::Scalar(dataType) => dataType.clone(),
+            VarType::List(dataType) => dataType.clone(),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum DataType {
-    FileEnd = 0,
-    I8 = 1,
-    U8 = 2,
-    I16 = 3,
-    U16 = 4,
-    I32 = 5,
-    U32 = 6,
-    I64 = 7,
-    U64 = 8,
-    StringId = 9,
-    String = 10,
-    Struct = 11,
+    FileEnd,
+    I8,
+    U8,
+    I16,
+    U16,
+    I32,
+    U32,
+    I64,
+    U64,
+    StringId,
+    String,
+    Struct,
 }
 
 impl DataType {
@@ -164,6 +252,20 @@ impl DataType {
             10 => DataType::String,
             11 => DataType::Struct,
             _ => panic!("tried to map {} to DataType", byte),
+        }
+    }
+
+    fn read_from(&self, reader: &mut impl Read) -> ParsedFieldContent {
+        match self {
+            DataType::I8 => ParsedFieldContent::I8(reader.read_i8().unwrap()),
+            DataType::U8 => ParsedFieldContent::U8(reader.read_u8().unwrap()),
+            DataType::I16 => ParsedFieldContent::I16(reader.read_i16::<BigEndian>().unwrap()),
+            DataType::U16 => ParsedFieldContent::U16(reader.read_u16::<BigEndian>().unwrap()),
+            DataType::I32 => ParsedFieldContent::I32(reader.read_i32::<BigEndian>().unwrap()),
+            DataType::U32 => ParsedFieldContent::U32(reader.read_u32::<BigEndian>().unwrap()),
+            DataType::I64 => ParsedFieldContent::I64(reader.read_i64::<BigEndian>().unwrap()),
+            DataType::U64 => ParsedFieldContent::U64(reader.read_u64::<BigEndian>().unwrap()),
+            _ => panic!(),
         }
     }
 }
