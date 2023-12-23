@@ -4,12 +4,10 @@ use std::io::prelude::*;
 use std::path::Path;
 
 use byteorder::{BigEndian, ReadBytesExt};
-use serde::{Serialize, Serializer};
-use serde::ser::SerializeStruct;
 
 use crate::base_readers::read_gamma;
 use crate::header::SaveFileHeader;
-use crate::table_reader::{read_table_header, TableItem};
+use crate::table_reader::{read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
 pub fn load_file(path: &Path) {
@@ -42,29 +40,9 @@ pub fn load_file(path: &Path) {
             let fields = read_table_header(&mut decoder);
             // println!("Fields in header: {:#?}", fields);
 
-            let mut parsed_items: Vec<TableItem> = Vec::new();
-
             if chunk_type == ChunkType::Table {
-                let mut index = 0usize;
-                loop {
-                    let mut size = read_gamma(&mut decoder);
-                    if size == 0 {
-                        break;
-                    }
-                    size -= 1;
-
-                    println!("Object length: {} bytes", size);
-                    index += 1;
-                    println!("Index: {}", index);
-
-                    let parsed_fields: TableItem = TableItem(
-                        fields
-                            .iter()
-                            .map(|field| field.parse_from(&mut decoder))
-                            .collect(),
-                    );
-                    parsed_items.push(parsed_fields);
-                }
+                let items = read_table(&mut decoder, fields);
+                chunks.insert(String::from(chunk_id), items);
             }
 
             if chunk_type == ChunkType::SparseTable {
@@ -75,15 +53,11 @@ pub fn load_file(path: &Path) {
                     }
                     obj_length -= 2;
 
-                    println!("Object length: {} bytes", obj_length);
+                    // println!("Object length: {} bytes", obj_length);
                     let index = read_gamma(&mut decoder);
-                    println!("Index: {}", index);
+                    // println!("Index: {}", index);
                     skip_bytes(&mut decoder, obj_length);
                 }
-            }
-
-            if parsed_items.len() != 0 {
-                chunks.insert(String::from(chunk_id), parsed_items);
             }
         }
         if chunk_type == ChunkType::Riff {

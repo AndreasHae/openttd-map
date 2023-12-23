@@ -36,6 +36,34 @@ pub enum ParsedFieldContent {
     Struct(Vec<ParsedField>),
 }
 
+pub fn read_table(
+    mut decoder: &mut impl Read,
+    fields: Vec<Field>,
+) -> Vec<TableItem> {
+    let mut index = 0usize;
+    let mut parsed_items: Vec<TableItem> = Vec::new();
+    loop {
+        let mut size = read_gamma(&mut decoder);
+        if size == 0 {
+            break;
+        }
+        size -= 1;
+
+        // println!("Object length: {} bytes", size);
+        index += 1;
+        // println!("Index: {}", index);
+
+        let parsed_fields: TableItem = TableItem(
+            fields
+                .iter()
+                .map(|field| field.parse_from(&mut decoder))
+                .collect(),
+        );
+        parsed_items.push(parsed_fields);
+    }
+    parsed_items
+}
+
 #[derive(Debug)]
 pub struct Field {
     key: String,
