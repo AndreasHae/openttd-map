@@ -7,6 +7,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use crate::base_readers::{has_bit, read_gamma, read_str};
 use crate::header::SaveFileHeader;
 
+#[allow(dead_code)]
 pub fn load_file(path: &Path) {
     let mut file = File::open(path).unwrap();
     let header = SaveFileHeader::read_from(&mut file);
@@ -33,7 +34,7 @@ pub fn load_file(path: &Path) {
             assert!(table_header_length > 0, "table header size was 0");
             println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
-            println!("Fields in header: {:#?}", fields);
+            // println!("Fields in header: {:#?}", fields);
 
             if chunk_type == ChunkType::Table {
                 let mut index = 0usize;
@@ -48,12 +49,9 @@ pub fn load_file(path: &Path) {
                     index += 1;
                     println!("Index: {}", index);
 
-                    if chunk_id == "GLOG" {
-                        for field in &fields {
-                            println!("{:?}", field.parse_from(&mut decoder));
-                        }
-                    } else {
-                        skip_bytes(&mut decoder, size);
+                    let parsed_fields: Vec<ParsedField> = fields.iter().map(|field| field.parse_from(&mut decoder)).collect();
+                    if chunk_id == "DATE" {
+                        println!("{:#?}", parsed_fields);
                     }
                 }
             }
@@ -119,24 +117,29 @@ fn skip_bytes(decoder: &mut impl Read, bytes: usize) {
 fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     let mut fields = vec![];
     loop {
-        match VarType::from_byte(reader.read_u8().unwrap()) {
+        let var_type = VarType::from_byte(reader.read_u8().unwrap());
+        match var_type {
             None => break,
             Some(var_type) => {
                 let key = read_str(reader);
-                fields.push(if var_type.data_type() == DataType::Struct {
-                    Field {
-                        key,
-                        var_type,
-                        children: Some(read_table_header(reader)),
-                    }
-                } else {
-                    Field {
-                        key,
-                        var_type,
-                        children: None,
-                    }
-                })
+                fields.push(Field {
+                    key,
+                    var_type,
+                    children: None,
+                });
             }
+        }
+    }
+    for field in fields.as_mut_slice() {
+        if field.var_type.data_type() == DataType::Struct {
+            drop(std::mem::replace(
+                field,
+                Field {
+                    key: field.key.clone(),
+                    var_type: field.var_type.clone(),
+                    children: Some(read_table_header(reader)),
+                },
+            ))
         }
     }
     fields
@@ -214,8 +217,8 @@ impl VarType {
 
     fn data_type(&self) -> DataType {
         match self {
-            VarType::Scalar(dataType) => dataType.clone(),
-            VarType::List(dataType) => dataType.clone(),
+            VarType::Scalar(data_type) => data_type.clone(),
+            VarType::List(data_type) => data_type.clone(),
         }
     }
 }
