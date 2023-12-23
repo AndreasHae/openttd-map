@@ -1,7 +1,8 @@
 use std::io::Read;
 
 use byteorder::{BigEndian, ReadBytesExt};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeMap;
 
 use crate::base_readers::{has_bit, read_gamma, read_str};
 
@@ -20,7 +21,7 @@ pub enum ParsedFieldData {
     List(Vec<ParsedFieldContent>),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub enum ParsedFieldContent {
     FileEnd,
     I8(i8),
@@ -34,6 +35,63 @@ pub enum ParsedFieldContent {
     StringId,
     String,
     Struct(Vec<ParsedField>),
+}
+
+impl Serialize for ParsedFieldContent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        match self {
+            ParsedFieldContent::FileEnd => panic!("should never happen"),
+            ParsedFieldContent::I8(value) => serializer.serialize_i8(*value),
+            ParsedFieldContent::U8(value) => serializer.serialize_u8(*value),
+            ParsedFieldContent::I16(value) => serializer.serialize_i16(*value),
+            ParsedFieldContent::U16(value) => serializer.serialize_u16(*value),
+            ParsedFieldContent::I32(value) => serializer.serialize_i32(*value),
+            ParsedFieldContent::U32(value) => serializer.serialize_u32(*value),
+            ParsedFieldContent::I64(value) => serializer.serialize_i64(*value),
+            ParsedFieldContent::U64(value) => serializer.serialize_u64(*value),
+            ParsedFieldContent::StringId => todo!(),
+            ParsedFieldContent::String => todo!(),
+            ParsedFieldContent::Struct(fields) => {
+                let mut map = serializer.serialize_map(Some(fields.len()))?;
+                for field in fields {
+                    map.serialize_entry(field.key.as_str(), &field.data)?;
+                }
+                map.end()
+            },
+
+        }
+    }
+}
+
+pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
+    let mut fields = vec![];
+    loop {
+        let var_type = VarType::from_byte(reader.read_u8().unwrap());
+        match var_type {
+            None => break,
+            Some(var_type) => {
+                let key = read_str(reader);
+                fields.push(Field {
+                    key,
+                    var_type,
+                    children: None,
+                });
+            }
+        }
+    }
+    for field in fields.as_mut_slice() {
+        if field.var_type.data_type() == DataType::Struct {
+            drop(std::mem::replace(
+                field,
+                Field {
+                    key: field.key.clone(),
+                    var_type: field.var_type.clone(),
+                    children: Some(read_table_header(reader)),
+                },
+            ))
+        }
+    }
+    fields
 }
 
 pub fn read_table(
@@ -190,35 +248,4 @@ impl DataType {
             _ => panic!(),
         }
     }
-}
-
-pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
-    let mut fields = vec![];
-    loop {
-        let var_type = VarType::from_byte(reader.read_u8().unwrap());
-        match var_type {
-            None => break,
-            Some(var_type) => {
-                let key = read_str(reader);
-                fields.push(Field {
-                    key,
-                    var_type,
-                    children: None,
-                });
-            }
-        }
-    }
-    for field in fields.as_mut_slice() {
-        if field.var_type.data_type() == DataType::Struct {
-            drop(std::mem::replace(
-                field,
-                Field {
-                    key: field.key.clone(),
-                    var_type: field.var_type.clone(),
-                    children: Some(read_table_header(reader)),
-                },
-            ))
-        }
-    }
-    fields
 }
