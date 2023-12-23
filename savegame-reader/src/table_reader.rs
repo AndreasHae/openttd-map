@@ -2,12 +2,27 @@ use std::io::Read;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::{Serialize, Serializer};
-use serde::ser::SerializeMap;
+use serde::ser::{SerializeMap, SerializeSeq};
 
 use crate::base_readers::{has_bit, read_gamma, read_str};
 
-#[derive(Serialize)]
+#[derive(Debug)]
 pub struct TableItem(pub Vec<ParsedField>);
+
+impl Serialize for TableItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let TableItem(fields) = self;
+
+        let mut map = serializer.serialize_map(Some(fields.len()))?;
+        for field in fields {
+            map.serialize_entry(field.key.as_str(), &field.data)?;
+        }
+        map.end()
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct ParsedField {
@@ -15,10 +30,28 @@ pub struct ParsedField {
     data: ParsedFieldData,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub enum ParsedFieldData {
     Scalar(ParsedFieldContent),
     List(Vec<ParsedFieldContent>),
+}
+
+impl Serialize for ParsedFieldData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ParsedFieldData::Scalar(value) => value.serialize(serializer),
+            ParsedFieldData::List(values) => {
+                let mut list = serializer.serialize_seq(Some(values.len()))?;
+                for value in values {
+                    list.serialize_element(value)?;
+                }
+                list.end()
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -34,11 +67,14 @@ pub enum ParsedFieldContent {
     U64(u64),
     StringId,
     String,
-    Struct(Vec<ParsedField>),
+    Struct(TableItem),
 }
 
 impl Serialize for ParsedFieldContent {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         match self {
             ParsedFieldContent::FileEnd => panic!("should never happen"),
             ParsedFieldContent::I8(value) => serializer.serialize_i8(*value),
@@ -51,14 +87,7 @@ impl Serialize for ParsedFieldContent {
             ParsedFieldContent::U64(value) => serializer.serialize_u64(*value),
             ParsedFieldContent::StringId => todo!(),
             ParsedFieldContent::String => todo!(),
-            ParsedFieldContent::Struct(fields) => {
-                let mut map = serializer.serialize_map(Some(fields.len()))?;
-                for field in fields {
-                    map.serialize_entry(field.key.as_str(), &field.data)?;
-                }
-                map.end()
-            },
-
+            ParsedFieldContent::Struct(table_item) => table_item.serialize(serializer),
         }
     }
 }
@@ -94,10 +123,7 @@ pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     fields
 }
 
-pub fn read_table(
-    mut decoder: &mut impl Read,
-    fields: Vec<Field>,
-) -> Vec<TableItem> {
+pub fn read_table(mut decoder: &mut impl Read, fields: Vec<Field>) -> Vec<TableItem> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
@@ -141,7 +167,7 @@ impl Field {
                         for child_field in children {
                             parsed_children.push(child_field.parse_from(reader));
                         }
-                        ParsedFieldContent::Struct(parsed_children)
+                        ParsedFieldContent::Struct(TableItem(parsed_children))
                     } else {
                         data_type.read_from(reader)
                     };
@@ -155,7 +181,7 @@ impl Field {
                     for child_field in children {
                         parsed_children.push(child_field.parse_from(reader));
                     }
-                    ParsedFieldContent::Struct(parsed_children)
+                    ParsedFieldContent::Struct(TableItem(parsed_children))
                 } else {
                     data_type.read_from(reader)
                 };
