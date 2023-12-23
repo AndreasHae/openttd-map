@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
 use byteorder::{BigEndian, ReadBytesExt};
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeStruct;
 
 use crate::base_readers::{has_bit, read_gamma, read_str};
 use crate::header::SaveFileHeader;
@@ -14,6 +17,8 @@ pub fn load_file(path: &Path) {
     println!("{:?}", header);
 
     let mut decoder = header.format.get_decoder(file);
+
+    let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
     loop {
         let mut chunk_id = [0; 4];
@@ -36,6 +41,8 @@ pub fn load_file(path: &Path) {
             let fields = read_table_header(&mut decoder);
             // println!("Fields in header: {:#?}", fields);
 
+            let mut parsed_items: Vec<TableItem> = Vec::new();
+
             if chunk_type == ChunkType::Table {
                 let mut index = 0usize;
                 loop {
@@ -49,10 +56,13 @@ pub fn load_file(path: &Path) {
                     index += 1;
                     println!("Index: {}", index);
 
-                    let parsed_fields: Vec<ParsedField> = fields.iter().map(|field| field.parse_from(&mut decoder)).collect();
-                    if chunk_id == "DATE" {
-                        println!("{:#?}", parsed_fields);
-                    }
+                    let parsed_fields: TableItem = TableItem(
+                        fields
+                            .iter()
+                            .map(|field| field.parse_from(&mut decoder))
+                            .collect(),
+                    );
+                    parsed_items.push(parsed_fields);
                 }
             }
 
@@ -70,6 +80,10 @@ pub fn load_file(path: &Path) {
                     skip_bytes(&mut decoder, obj_length);
                 }
             }
+
+            if parsed_items.len() != 0 {
+                chunks.insert(String::from(chunk_id), parsed_items);
+            }
         }
         if chunk_type == ChunkType::Riff {
             let mut length = usize::from(decoder.read_u8().unwrap()) << 16;
@@ -79,21 +93,26 @@ pub fn load_file(path: &Path) {
         }
         println!()
     }
+
+    println!("{}", serde_json::to_string(&chunks).unwrap())
 }
 
-#[derive(Debug)]
+#[derive(Serialize)]
+struct TableItem(Vec<ParsedField>);
+
+#[derive(Debug, Serialize)]
 struct ParsedField {
     key: String,
     data: ParsedFieldData,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 enum ParsedFieldData {
     Scalar(ParsedFieldContent),
     List(Vec<ParsedFieldContent>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 enum ParsedFieldContent {
     FileEnd,
     I8(i8),
