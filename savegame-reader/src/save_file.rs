@@ -55,7 +55,7 @@ impl<'a> CompressedSaveFile<'a> {
 
         let reader = match format {
             SaveFileFormat::Lzma => XzDecoder::new(reader),
-            _ => panic!("Unsupported savegame format"),
+            format => panic!("Unsupported savegame format: {:?}", format),
         };
 
         CompressedSaveFile {
@@ -121,6 +121,7 @@ impl<R: Read + Seek> SaveFile for DebugSaveFile<R> {
     }
 }
 
+#[derive(Debug)]
 enum SaveFileFormat {
     Lzo,
     Zlib,

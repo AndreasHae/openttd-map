@@ -7,7 +7,7 @@ use crate::save_file::SaveFile;
 use crate::table_reader::{read_sparse_table, read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
-pub fn load_file(mut save_file: impl SaveFile + Seek) {
+pub fn load_file(mut save_file: impl SaveFile) {
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
     loop {

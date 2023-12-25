@@ -1,5 +1,3 @@
-use std::io::{Read, Seek, SeekFrom};
-
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Serialize, Serializer};
@@ -66,8 +64,8 @@ pub enum ParsedFieldContent {
     U32(u32),
     I64(i64),
     U64(u64),
-    StringId,
-    String,
+    StringId(u16),
+    String(String),
     Struct(TableItem),
 }
 
@@ -86,8 +84,8 @@ impl Serialize for ParsedFieldContent {
             ParsedFieldContent::U32(value) => serializer.serialize_u32(*value),
             ParsedFieldContent::I64(value) => serializer.serialize_i64(*value),
             ParsedFieldContent::U64(value) => serializer.serialize_u64(*value),
-            ParsedFieldContent::StringId => todo!(),
-            ParsedFieldContent::String => todo!(),
+            ParsedFieldContent::StringId(value) => serializer.serialize_u16(*value),
+            ParsedFieldContent::String(value) => serializer.serialize_str(value.as_str()),
             ParsedFieldContent::Struct(table_item) => table_item.serialize(serializer),
         }
     }
@@ -124,7 +122,7 @@ pub fn read_table_header(reader: &mut impl SaveFile) -> Vec<Field> {
     fields
 }
 
-pub fn read_table(decoder: &mut (impl SaveFile + Seek), fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec<TableItem> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
@@ -193,10 +191,19 @@ impl Field {
                             parsed_children.push(child_field.parse_from(reader));
                         }
                         ParsedFieldContent::Struct(TableItem(parsed_children))
+                    } else if *data_type == DataType::String {
+                        println!("Start: {}", reader.debug_info());
+                        let mut buf = vec![0; length];
+                        reader.read_exact(&mut buf).unwrap();
+                        ParsedFieldContent::String(String::from(std::str::from_utf8(&buf).unwrap()))
                     } else {
                         data_type.read_from(reader)
                     };
                     items.push(value);
+
+                    if *data_type == DataType::String {
+                        break;
+                    }
                 }
                 ParsedFieldData::List(items)
             }
@@ -286,7 +293,7 @@ impl DataType {
         }
     }
 
-    fn read_from(&self, reader: &mut impl Read) -> ParsedFieldContent {
+    fn read_from(&self, reader: &mut impl SaveFile) -> ParsedFieldContent {
         match self {
             DataType::I8 => ParsedFieldContent::I8(reader.read_i8().unwrap()),
             DataType::U8 => ParsedFieldContent::U8(reader.read_u8().unwrap()),
@@ -296,7 +303,10 @@ impl DataType {
             DataType::U32 => ParsedFieldContent::U32(reader.read_u32::<BigEndian>().unwrap()),
             DataType::I64 => ParsedFieldContent::I64(reader.read_i64::<BigEndian>().unwrap()),
             DataType::U64 => ParsedFieldContent::U64(reader.read_u64::<BigEndian>().unwrap()),
-            _ => panic!(),
+            DataType::StringId => {
+                ParsedFieldContent::StringId(reader.read_u16::<BigEndian>().unwrap())
+            }
+            unknown => panic!("undefined read_from for {:?}", unknown),
         }
     }
 }
