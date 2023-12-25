@@ -175,12 +175,11 @@ fn chunk_name_of(chunk_id: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
-    use std::io::Write;
-    use std::path::Path;
 
     use crate::loader::load_file;
-    use crate::save_file::{CompressedSaveFile, DebugSaveFile};
-    use crate::table_reader::TableItem;
+    #[cfg(feature = "liblzma")]
+    use crate::save_file::CompressedSaveFile;
+    use crate::save_file::DebugSaveFile;
 
     #[test]
     fn test_load_valid_debug_file() {
@@ -210,6 +209,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "liblzma")]
     fn test_load_valid_compressed_file() {
         let file = File::open("./test-big.sav").unwrap();
         let save_file = CompressedSaveFile::new(file);
