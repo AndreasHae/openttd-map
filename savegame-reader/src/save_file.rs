@@ -3,7 +3,7 @@ use std::io;
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::common::has_bit;
-use xz2::read::XzDecoder;
+use liblzma::read::XzDecoder;
 
 pub trait SaveFile: Read {
     fn debug_info(&mut self) -> String;
