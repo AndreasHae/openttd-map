@@ -179,11 +179,11 @@ mod tests {
     use std::path::Path;
 
     use crate::loader::load_file;
-    use crate::save_file::DebugSaveFile;
+    use crate::save_file::{CompressedSaveFile, DebugSaveFile};
     use crate::table_reader::TableItem;
 
     #[test]
-    fn testy() {
+    fn test_load_valid_debug_file() {
         let file = File::open("./test-big.sav.decoded").unwrap();
         let save_file = DebugSaveFile::new_from_decoded(file);
         // let file = File::open("test_empty_map.sav").unwrap();
@@ -191,21 +191,31 @@ mod tests {
 
         let chunks = load_file(save_file).unwrap();
 
-        let mut out_file = File::create(Path::new("../out.json")).unwrap();
-        out_file
-            .write(
-                serde_json::to_string(
-                    chunks
-                        .get("STNN")
-                        .unwrap()
-                        .iter()
-                        .take(100)
-                        .collect::<Vec<&TableItem>>()
-                        .as_slice(),
-                )
-                .unwrap()
-                .as_bytes(),
-            )
-            .unwrap();
+        // let mut out_file = File::create(Path::new("../out.json")).unwrap();
+        // out_file
+        //     .write(
+        //         serde_json::to_string(
+        //             chunks
+        //                 .get("STNN")
+        //                 .unwrap()
+        //                 .iter()
+        //                 .take(100)
+        //                 .collect::<Vec<&TableItem>>()
+        //                 .as_slice(),
+        //         )
+        //         .unwrap()
+        //         .as_bytes(),
+        //     )
+        //     .unwrap();
+    }
+
+    #[test]
+    fn test_load_valid_compressed_file() {
+        let file = File::open("./test-big.sav").unwrap();
+        let save_file = CompressedSaveFile::new(file);
+        // let file = File::open("test_empty_map.sav").unwrap();
+        // let save_file = CompressedSaveFile::new(file);
+
+        let chunks = load_file(save_file).unwrap();
     }
 }
