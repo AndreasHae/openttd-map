@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use std::io::SeekFrom;
 use std::path::Path;
 
 use byteorder::{BigEndian, ReadBytesExt};
 
 use crate::base_readers::read_gamma;
 use crate::header::SaveFileHeader;
-use crate::table_reader::{read_table, read_table_header, TableItem};
+use crate::table_reader::{read_sparse_table, read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
 pub fn load_file(path: &Path) {
@@ -15,7 +16,8 @@ pub fn load_file(path: &Path) {
     let header = SaveFileHeader::read_from(&mut file);
     println!("{:?}", header);
 
-    let mut decoder = header.format.get_decoder(file);
+    // let mut decoder = header.format.get_decoder(file);
+    let mut decoder = File::open("test-big.sav.decoded").unwrap();
 
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
@@ -36,28 +38,27 @@ pub fn load_file(path: &Path) {
             // read array length
             let table_header_length = read_gamma(&mut decoder);
             assert!(table_header_length > 0, "table header size was 0");
-            println!("Table header length: {} bytes", table_header_length);
+            // println!("Table header length: {} bytes", table_header_length);
             let fields = read_table_header(&mut decoder);
             // println!("Fields in header: {:#?}", fields);
 
-            if chunk_type == ChunkType::Table {
-                let items = read_table(&mut decoder, fields);
-                chunks.insert(String::from(chunk_id), items);
+            if chunk_id == "ORDR" {
+                println!("Fields in header: {:#?}", fields);
             }
 
-            if chunk_type == ChunkType::SparseTable {
-                loop {
-                    let mut obj_length = read_gamma(&mut decoder);
-                    if obj_length == 0 {
-                        break;
+            match chunk_type {
+                ChunkType::Table => {
+                    if chunk_id == "ORDR" {
+                        println!("{}", decoder.seek(SeekFrom::Current(0)).unwrap());
                     }
-                    obj_length -= 2;
-
-                    // println!("Object length: {} bytes", obj_length);
-                    let index = read_gamma(&mut decoder);
-                    // println!("Index: {}", index);
-                    skip_bytes(&mut decoder, obj_length);
+                    let items = read_table(&mut decoder, fields);
+                    chunks.insert(String::from(chunk_id), items);
                 }
+                ChunkType::SparseTable => {
+                    let items = read_sparse_table(&mut decoder, fields);
+                    chunks.insert(String::from(chunk_id), items);
+                }
+                _ => panic!("unexpected chunk type {:?}", chunk_type),
             }
         }
         if chunk_type == ChunkType::Riff {
@@ -66,10 +67,12 @@ pub fn load_file(path: &Path) {
             println!("Riff length: {}", length);
             skip_bytes(&mut decoder, length);
         }
-        println!()
+        println!();
     }
 
-    println!("{}", serde_json::to_string(&chunks).unwrap())
+    // println!("{}", serde_json::to_string(&chunks).unwrap())
+    println!("{:?}", chunks.keys());
+    // File::create(Path::new("./out.json")).unwrap().write(serde_json::to_string(&chunks.keys().collect()).unwrap().as_bytes());
 }
 
 fn skip_bytes(decoder: &mut impl Read, bytes: usize) {

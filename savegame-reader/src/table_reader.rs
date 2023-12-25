@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::{Serialize, Serializer};
@@ -24,7 +24,7 @@ impl Serialize for TableItem {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct ParsedField {
     key: String,
     data: ParsedFieldData,
@@ -123,24 +123,58 @@ pub fn read_table_header(reader: &mut impl Read) -> Vec<Field> {
     fields
 }
 
-pub fn read_table(mut decoder: &mut impl Read, fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_table(decoder: &mut (impl Read + Seek), fields: Vec<Field>) -> Vec<TableItem> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
-        let mut size = read_gamma(&mut decoder);
+        let mut size = read_gamma(decoder);
         if size == 0 {
             break;
         }
         size -= 1;
 
-        // println!("Object length: {} bytes", size);
+        if size == 0 {
+            println!("Object length: {} bytes", size);
+            println!("Index: {}", index);
+            println!(
+                "File location: {}",
+                decoder.seek(SeekFrom::Current(0)).unwrap()
+            );
+        }
         index += 1;
-        // println!("Index: {}", index);
 
         let parsed_fields: TableItem = TableItem(
             fields
                 .iter()
-                .map(|field| field.parse_from(&mut decoder))
+                .map(|field| field.parse_from(decoder))
+                .collect(),
+        );
+        if index == 702 || index == 703 {
+            println!("{:#?}", parsed_fields);
+        }
+        parsed_items.push(parsed_fields);
+    }
+    parsed_items
+}
+
+pub fn read_sparse_table(decoder: &mut impl Read, fields: Vec<Field>) -> Vec<TableItem> {
+    let mut index = 0usize;
+    let mut parsed_items: Vec<TableItem> = Vec::new();
+    loop {
+        let mut size = read_gamma(decoder);
+        if size == 0 {
+            break;
+        }
+        size -= 1;
+
+        println!("Object length: {} bytes", size);
+        index = read_gamma(decoder);
+        println!("Index: {}", index);
+
+        let parsed_fields: TableItem = TableItem(
+            fields
+                .iter()
+                .map(|field| field.parse_from(decoder))
                 .collect(),
         );
         parsed_items.push(parsed_fields);
