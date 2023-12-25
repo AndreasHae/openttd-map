@@ -179,6 +179,14 @@ pub struct Field {
 }
 
 impl Field {
+    pub fn new_custom_data() -> Field {
+        Field {
+            key: String::from("hasCustomData"),
+            var_type: VarType::Scalar(DataType::U8),
+            children: None,
+        }
+    }
+
     pub fn parse_from(&self, reader: &mut impl SaveFile) -> ParsedField {
         let data = match &self.var_type {
             VarType::List(data_type) => {
@@ -192,7 +200,6 @@ impl Field {
                         }
                         ParsedFieldContent::Struct(TableItem(parsed_children))
                     } else if *data_type == DataType::String {
-                        println!("Start: {}", reader.debug_info());
                         let mut buf = vec![0; length];
                         reader.read_exact(&mut buf).unwrap();
                         ParsedFieldContent::String(String::from(std::str::from_utf8(&buf).unwrap()))

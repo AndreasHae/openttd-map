@@ -4,10 +4,10 @@ use std::io::prelude::*;
 use byteorder::{BigEndian, ReadBytesExt};
 
 use crate::save_file::SaveFile;
-use crate::table_reader::{read_sparse_table, read_table, read_table_header, TableItem};
+use crate::table_reader::{read_sparse_table, read_table, read_table_header, Field, TableItem};
 
 #[allow(dead_code)]
-pub fn load_file(mut save_file: impl SaveFile) {
+pub fn load_file(mut save_file: impl SaveFile) -> HashMap<String, Vec<TableItem>> {
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
     loop {
@@ -19,7 +19,7 @@ pub fn load_file(mut save_file: impl SaveFile) {
         }
 
         let chunk_id = chunk_id_from_bytes(&chunk_id);
-        println!("Loading chunk {}: {}", chunk_id, chunk_name_of(chunk_id));
+        println!("Loading chunk {} ({})", chunk_id, chunk_name_of(chunk_id));
         let chunk_type = ChunkType::read_from(&mut save_file);
         println!("Chunk type: {:?}", chunk_type);
         println!("{}", save_file.debug_info());
@@ -30,8 +30,10 @@ pub fn load_file(mut save_file: impl SaveFile) {
             let table_header_length = save_file.read_gamma();
             assert!(table_header_length > 0, "table header size was 0");
             // println!("Table header length: {} bytes", table_header_length);
-            let fields = read_table_header(&mut save_file);
-            // println!("Fields in header: {:#?}", fields);
+            let mut fields = read_table_header(&mut save_file);
+            if chunk_id == "GSDT" {
+                fields.push(Field::new_custom_data())
+            }
 
             match chunk_type {
                 ChunkType::Table => {
@@ -53,10 +55,7 @@ pub fn load_file(mut save_file: impl SaveFile) {
         }
         println!();
     }
-
-    // println!("{}", serde_json::to_string(&chunks).unwrap())
-    println!("{:?}", chunks.keys());
-    // File::create(Path::new("./out.json")).unwrap().write(serde_json::to_string(&chunks.keys().collect()).unwrap().as_bytes());
+    chunks
 }
 
 fn skip_bytes(save_file: &mut impl Read, bytes: usize) {
@@ -175,9 +174,12 @@ fn chunk_name_of(chunk_id: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
 
     use crate::loader::load_file;
     use crate::save_file::DebugSaveFile;
+    use crate::table_reader::TableItem;
 
     #[test]
     fn testy() {
@@ -185,6 +187,24 @@ mod tests {
         let save_file = DebugSaveFile::new_from_decoded(file);
         // let file = File::open("test_empty_map.sav").unwrap();
         // let save_file = CompressedSaveFile::new(file);
-        load_file(save_file)
+
+        let chunks = load_file(save_file);
+
+        let mut out_file = File::create(Path::new("./out.json")).unwrap();
+        out_file
+            .write(
+                serde_json::to_string(
+                    chunks
+                        .get("PLYR")
+                        .unwrap()
+                        .iter()
+                        .take(100)
+                        .collect::<Vec<&TableItem>>()
+                        .as_slice(),
+                )
+                .unwrap()
+                .as_bytes(),
+            )
+            .unwrap();
     }
 }
