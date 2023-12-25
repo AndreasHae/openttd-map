@@ -1,11 +1,11 @@
 use std::mem::size_of;
 
 pub fn has_bit(input: usize, n: u8) -> bool {
-    if n > size_of::<usize>() as u8 {
+    let bits_in_type = size_of::<usize>() * 8;
+    if n > bits_in_type as u8 {
         panic!(
             "Tried to check for bit at {} but usize is only {} bits long",
-            n,
-            size_of::<usize>()
+            n, bits_in_type
         )
     }
 
