@@ -9,7 +9,7 @@ const Home: NextPage = () => {
 
   async function load(file: File): Promise<void> {
     const buf = new Uint8Array(await file.arrayBuffer());
-    console.log(wasm.load_file(buf));
+    console.log(JSON.parse(wasm.load_file(buf)));
   }
 
   return (
