@@ -215,6 +215,7 @@ mod tests {
         let save_file = CompressedSaveFile::new(file);
         // let file = File::open("test_empty_map.sav").unwrap();
         // let save_file = CompressedSaveFile::new(file);
+        println!("Savefile Version: {}", save_file.version);
 
         let chunks = load_file(save_file).unwrap();
     }

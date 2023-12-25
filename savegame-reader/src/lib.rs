@@ -17,10 +17,9 @@ pub fn load_file(buffer: &[u8]) -> String {
     let file = DebugSaveFile::new_from_decoded(Cursor::new(buffer));
     let chunks = loader::load_file(file).unwrap();
     let relevant_chunk_part = chunks
-        .get("STNN")
+        .get("LGRP")
         .unwrap()
         .iter()
-        .take(100)
         .collect::<Vec<&TableItem>>();
     serde_json::to_string(relevant_chunk_part.as_slice()).unwrap()
 }

@@ -1,15 +1,53 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { FilePicker } from "./file-picker";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as wasm from "../savegame-reader/pkg";
+import { SigmaContainer, useLoadGraph } from "@react-sigma/core";
+import Graph from "graphology";
+import "@react-sigma/core/lib/react-sigma.min.css";
 
+interface LinkEdge {
+  capacity: number;
+  usage: number;
+  travel_time_sum: number;
+  last_unrestricted_update: number;
+  last_restricted_update: number;
+  next_edge: number;
+}
+
+interface LinkNode {
+  xy: number;
+  supply: number;
+  demand: number;
+  station: number;
+  last_update: number;
+  edges: LinkEdge[];
+}
+
+interface LinkGraph {
+  cargo: number;
+  nodes: LinkNode[];
+}
 const Home: NextPage = () => {
   const [file, setFile] = useState<File | undefined>();
+  const [graph, setGraph] = useState<Graph | undefined>();
 
-  async function load(file: File): Promise<void> {
+  async function loadGraph(file: File): Promise<void> {
+    const graph = new Graph({ type: "directed", multi: false, allowSelfLoops: false });
+
     const buf = new Uint8Array(await file.arrayBuffer());
-    console.log(JSON.parse(wasm.load_file(buf)));
+    const allGraphs: LinkGraph[] = JSON.parse(wasm.load_file(buf));
+    const passengerGraphs = allGraphs.filter((graph) => graph.cargo === 0);
+
+    const nodes = passengerGraphs.flatMap((graph) => graph.nodes);
+    for (const node of nodes) {
+      const mapSizeX = 1024;
+      const logMapX = Math.log2(mapSizeX);
+      graph.addNode(node.station, { x: node.xy & (mapSizeX - 1), y: node.xy >> logMapX });
+    }
+
+    setGraph(graph);
   }
 
   return (
@@ -23,17 +61,40 @@ const Home: NextPage = () => {
         <h2 className="text-3xl md:text-4xl mt-6">More coming soon 🚧👷🏻‍♂️</h2>
         <FilePicker onFileChanged={setFile} />
         <button
-            className="bg-red-300 p-1 border rounded mt-2"
+          className="bg-red-300 p-1 border rounded mt-2"
           onClick={async () => {
             if (file) {
-              await load(file);
+              await loadGraph(file);
             }
           }}
         >
           Do the thing
         </button>
+        <DisplayGraph graph={graph} />
       </main>
     </>
+  );
+};
+
+interface LoadGraphProps {
+  graph: Graph;
+}
+
+export const LoadGraph = ({ graph }: LoadGraphProps) => {
+  const loadGraph = useLoadGraph();
+
+  useEffect(() => {
+    loadGraph(graph);
+  }, [loadGraph, graph]);
+
+  return null;
+};
+
+export const DisplayGraph = ({ graph }: LoadGraphProps) => {
+  return (
+    <SigmaContainer style={{ height: "500px", width: "500px" }}>
+      <LoadGraph graph={graph} />
+    </SigmaContainer>
   );
 };
 
