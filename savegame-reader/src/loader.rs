@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io;
 use std::io::prelude::*;
 
 use byteorder::{BigEndian, ReadBytesExt};
@@ -7,12 +8,12 @@ use crate::save_file::SaveFile;
 use crate::table_reader::{read_sparse_table, read_table, read_table_header, Field, TableItem};
 
 #[allow(dead_code)]
-pub fn load_file(mut save_file: impl SaveFile) -> HashMap<String, Vec<TableItem>> {
+pub fn load_file(mut save_file: impl SaveFile) -> io::Result<HashMap<String, Vec<TableItem>>> {
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
     loop {
         let mut chunk_id = [0; 4];
-        save_file.read_exact(&mut chunk_id).unwrap();
+        save_file.read_exact(&mut chunk_id)?;
 
         if u32::from_be_bytes(chunk_id) == 0 {
             break;
@@ -20,47 +21,47 @@ pub fn load_file(mut save_file: impl SaveFile) -> HashMap<String, Vec<TableItem>
 
         let chunk_id = chunk_id_from_bytes(&chunk_id);
         println!("Loading chunk {} ({})", chunk_id, chunk_name_of(chunk_id));
-        let chunk_type = ChunkType::read_from(&mut save_file);
+        let chunk_type = ChunkType::read_from(&mut save_file)?;
         println!("Chunk type: {:?}", chunk_type);
         println!("{}", save_file.debug_info());
 
         if chunk_type.has_table_header() {
             // SlIterateArray
             // read array length
-            let table_header_length = save_file.read_gamma();
+            let table_header_length = save_file.read_gamma()?;
             assert!(table_header_length > 0, "table header size was 0");
             // println!("Table header length: {} bytes", table_header_length);
-            let mut fields = read_table_header(&mut save_file);
+            let mut fields = read_table_header(&mut save_file)?;
             if chunk_id == "GSDT" {
                 fields.push(Field::new_custom_data())
             }
 
             match chunk_type {
                 ChunkType::Table => {
-                    let items = read_table(&mut save_file, fields);
+                    let items = read_table(&mut save_file, fields)?;
                     chunks.insert(String::from(chunk_id), items);
                 }
                 ChunkType::SparseTable => {
-                    let items = read_sparse_table(&mut save_file, fields);
+                    let items = read_sparse_table(&mut save_file, fields)?;
                     chunks.insert(String::from(chunk_id), items);
                 }
                 _ => panic!("unexpected chunk type {:?}", chunk_type),
             }
         }
         if chunk_type == ChunkType::Riff {
-            let mut length = usize::from(save_file.read_u8().unwrap()) << 16;
-            length += usize::from(save_file.read_u16::<BigEndian>().unwrap());
+            let mut length = usize::from(save_file.read_u8()?) << 16;
+            length += usize::from(save_file.read_u16::<BigEndian>()?);
             println!("Riff length: {}", length);
-            skip_bytes(&mut save_file, length);
+            skip_bytes(&mut save_file, length)?;
         }
         println!();
     }
-    chunks
+    Ok(chunks)
 }
 
-fn skip_bytes(save_file: &mut impl Read, bytes: usize) {
+fn skip_bytes(save_file: &mut impl Read, bytes: usize) -> io::Result<()> {
     let mut buf = vec![0; bytes];
-    save_file.read_exact(&mut buf).unwrap();
+    save_file.read_exact(&mut buf)
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -73,16 +74,16 @@ enum ChunkType {
 }
 
 impl ChunkType {
-    fn read_from(reader: &mut impl Read) -> ChunkType {
+    fn read_from(reader: &mut impl Read) -> io::Result<ChunkType> {
         const TYPE_MASK: u8 = 0xF;
-        match reader.read_u8().unwrap() & TYPE_MASK {
+        Ok(match reader.read_u8()? & TYPE_MASK {
             0 => ChunkType::Riff,
             1 => ChunkType::Array,
             2 => ChunkType::SparseArray,
             3 => ChunkType::Table,
             4 => ChunkType::SparseTable,
             _ => panic!("Unknown chunk type"),
-        }
+        })
     }
 
     fn has_table_header(&self) -> bool {
@@ -188,14 +189,14 @@ mod tests {
         // let file = File::open("test_empty_map.sav").unwrap();
         // let save_file = CompressedSaveFile::new(file);
 
-        let chunks = load_file(save_file);
+        let chunks = load_file(save_file).unwrap();
 
-        let mut out_file = File::create(Path::new("./out.json")).unwrap();
+        let mut out_file = File::create(Path::new("../out.json")).unwrap();
         out_file
             .write(
                 serde_json::to_string(
                     chunks
-                        .get("PLYR")
+                        .get("STNN")
                         .unwrap()
                         .iter()
                         .take(100)

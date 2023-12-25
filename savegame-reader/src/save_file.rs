@@ -1,4 +1,5 @@
 use byteorder::ReadBytesExt;
+use std::io;
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::common::has_bit;
@@ -7,8 +8,8 @@ use xz2::read::XzDecoder;
 pub trait SaveFile: Read {
     fn debug_info(&mut self) -> String;
 
-    fn read_gamma(&mut self) -> usize {
-        let mut length = usize::from(self.read_u8().unwrap());
+    fn read_gamma(&mut self) -> io::Result<usize> {
+        let mut length = usize::from(self.read_u8()?);
         if has_bit(length, 7) {
             length &= !0b1000_0000;
             if has_bit(length, 6) {
@@ -20,23 +21,23 @@ pub trait SaveFile: Read {
                         if has_bit(length, 3) {
                             panic!("Unsupported array length")
                         }
-                        length = length << 8 | usize::from(self.read_u8().unwrap());
+                        length = length << 8 | usize::from(self.read_u8()?);
                     }
-                    length = length << 8 | usize::from(self.read_u8().unwrap());
+                    length = length << 8 | usize::from(self.read_u8()?);
                 }
-                length = length << 8 | usize::from(self.read_u8().unwrap());
+                length = length << 8 | usize::from(self.read_u8()?);
             }
-            length = length << 8 | usize::from(self.read_u8().unwrap());
+            length = length << 8 | usize::from(self.read_u8()?);
         }
-        length
+        Ok(length)
     }
 
-    fn read_string(&mut self) -> String {
-        let length = self.read_gamma();
+    fn read_string(&mut self) -> io::Result<String> {
+        let length = self.read_gamma()?;
         let mut buf = vec![0; length];
-        self.read_exact(&mut buf).unwrap();
+        self.read_exact(&mut buf)?;
 
-        String::from(std::str::from_utf8(&buf).unwrap())
+        Ok(String::from(std::str::from_utf8(&buf).unwrap()))
     }
 }
 

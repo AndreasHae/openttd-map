@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Serialize, Serializer};
+use std::io;
 
 use crate::common::has_bit;
 use crate::save_file::SaveFile;
@@ -91,14 +92,14 @@ impl Serialize for ParsedFieldContent {
     }
 }
 
-pub fn read_table_header(reader: &mut impl SaveFile) -> Vec<Field> {
+pub fn read_table_header(reader: &mut impl SaveFile) -> io::Result<Vec<Field>> {
     let mut fields = vec![];
     loop {
-        let var_type = VarType::from_byte(reader.read_u8().unwrap());
+        let var_type = VarType::from_byte(reader.read_u8()?);
         match var_type {
             None => break,
             Some(var_type) => {
-                let key = reader.read_string();
+                let key = reader.read_string()?;
                 fields.push(Field {
                     key,
                     var_type,
@@ -114,19 +115,19 @@ pub fn read_table_header(reader: &mut impl SaveFile) -> Vec<Field> {
                 Field {
                     key: field.key.clone(),
                     var_type: field.var_type.clone(),
-                    children: Some(read_table_header(reader)),
+                    children: Some(read_table_header(reader)?),
                 },
             ))
         }
     }
-    fields
+    Ok(fields)
 }
 
-pub fn read_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> io::Result<Vec<TableItem>> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
-        let mut size = decoder.read_gamma();
+        let mut size = decoder.read_gamma()?;
         if size == 0 {
             break;
         }
@@ -137,38 +138,37 @@ pub fn read_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec<TableI
         }
         index += 1;
 
-        let parsed_fields: TableItem = TableItem(
-            fields
-                .iter()
-                .map(|field| field.parse_from(decoder))
-                .collect(),
-        );
-        parsed_items.push(parsed_fields);
+        let parsed_fields: io::Result<Vec<ParsedField>> = fields
+            .iter()
+            .map(|field| field.parse_from(decoder))
+            .collect();
+        parsed_items.push(TableItem(parsed_fields?));
     }
-    parsed_items
+    Ok(parsed_items)
 }
 
-pub fn read_sparse_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec<TableItem> {
+pub fn read_sparse_table(
+    decoder: &mut impl SaveFile,
+    fields: Vec<Field>,
+) -> io::Result<Vec<TableItem>> {
     let mut index = 0usize;
     let mut parsed_items: Vec<TableItem> = Vec::new();
     loop {
-        let mut size = decoder.read_gamma();
+        let mut size = decoder.read_gamma()?;
         if size == 0 {
             break;
         }
         size -= 1;
 
-        index = decoder.read_gamma();
+        index = decoder.read_gamma()?;
 
-        let parsed_fields: TableItem = TableItem(
-            fields
-                .iter()
-                .map(|field| field.parse_from(decoder))
-                .collect(),
-        );
-        parsed_items.push(parsed_fields);
+        let parsed_fields: io::Result<Vec<ParsedField>> = fields
+            .iter()
+            .map(|field| field.parse_from(decoder))
+            .collect();
+        parsed_items.push(TableItem(parsed_fields?));
     }
-    parsed_items
+    Ok(parsed_items)
 }
 
 #[derive(Debug)]
@@ -187,24 +187,24 @@ impl Field {
         }
     }
 
-    pub fn parse_from(&self, reader: &mut impl SaveFile) -> ParsedField {
+    pub fn parse_from(&self, reader: &mut impl SaveFile) -> io::Result<ParsedField> {
         let data = match &self.var_type {
             VarType::List(data_type) => {
-                let length = reader.read_gamma();
+                let length = reader.read_gamma()?;
                 let mut items = vec![];
                 for i in 0..length {
                     let value = if let Some(children) = &self.children {
                         let mut parsed_children = vec![];
                         for child_field in children {
-                            parsed_children.push(child_field.parse_from(reader));
+                            parsed_children.push(child_field.parse_from(reader)?);
                         }
                         ParsedFieldContent::Struct(TableItem(parsed_children))
                     } else if *data_type == DataType::String {
                         let mut buf = vec![0; length];
-                        reader.read_exact(&mut buf).unwrap();
+                        reader.read_exact(&mut buf)?;
                         ParsedFieldContent::String(String::from(std::str::from_utf8(&buf).unwrap()))
                     } else {
-                        data_type.read_from(reader)
+                        data_type.read_from(reader)?
                     };
                     items.push(value);
 
@@ -218,20 +218,20 @@ impl Field {
                 let content = if let Some(children) = &self.children {
                     let mut parsed_children: Vec<ParsedField> = vec![];
                     for child_field in children {
-                        parsed_children.push(child_field.parse_from(reader));
+                        parsed_children.push(child_field.parse_from(reader)?);
                     }
                     ParsedFieldContent::Struct(TableItem(parsed_children))
                 } else {
-                    data_type.read_from(reader)
+                    data_type.read_from(reader)?
                 };
                 ParsedFieldData::Scalar(content)
             }
         };
 
-        ParsedField {
+        Ok(ParsedField {
             key: self.key.clone(),
             data,
-        }
+        })
     }
 }
 
@@ -300,20 +300,18 @@ impl DataType {
         }
     }
 
-    fn read_from(&self, reader: &mut impl SaveFile) -> ParsedFieldContent {
-        match self {
-            DataType::I8 => ParsedFieldContent::I8(reader.read_i8().unwrap()),
-            DataType::U8 => ParsedFieldContent::U8(reader.read_u8().unwrap()),
-            DataType::I16 => ParsedFieldContent::I16(reader.read_i16::<BigEndian>().unwrap()),
-            DataType::U16 => ParsedFieldContent::U16(reader.read_u16::<BigEndian>().unwrap()),
-            DataType::I32 => ParsedFieldContent::I32(reader.read_i32::<BigEndian>().unwrap()),
-            DataType::U32 => ParsedFieldContent::U32(reader.read_u32::<BigEndian>().unwrap()),
-            DataType::I64 => ParsedFieldContent::I64(reader.read_i64::<BigEndian>().unwrap()),
-            DataType::U64 => ParsedFieldContent::U64(reader.read_u64::<BigEndian>().unwrap()),
-            DataType::StringId => {
-                ParsedFieldContent::StringId(reader.read_u16::<BigEndian>().unwrap())
-            }
+    fn read_from(&self, reader: &mut impl SaveFile) -> io::Result<ParsedFieldContent> {
+        Ok(match self {
+            DataType::I8 => ParsedFieldContent::I8(reader.read_i8()?),
+            DataType::U8 => ParsedFieldContent::U8(reader.read_u8()?),
+            DataType::I16 => ParsedFieldContent::I16(reader.read_i16::<BigEndian>()?),
+            DataType::U16 => ParsedFieldContent::U16(reader.read_u16::<BigEndian>()?),
+            DataType::I32 => ParsedFieldContent::I32(reader.read_i32::<BigEndian>()?),
+            DataType::U32 => ParsedFieldContent::U32(reader.read_u32::<BigEndian>()?),
+            DataType::I64 => ParsedFieldContent::I64(reader.read_i64::<BigEndian>()?),
+            DataType::U64 => ParsedFieldContent::U64(reader.read_u64::<BigEndian>()?),
+            DataType::StringId => ParsedFieldContent::StringId(reader.read_u16::<BigEndian>()?),
             unknown => panic!("undefined read_from for {:?}", unknown),
-        }
+        })
     }
 }
