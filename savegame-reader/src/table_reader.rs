@@ -135,12 +135,7 @@ pub fn read_table(decoder: &mut (impl SaveFile + Seek), fields: Vec<Field>) -> V
         size -= 1;
 
         if size == 0 {
-            println!("Object length: {} bytes", size);
-            println!("Index: {}", index);
-            println!(
-                "File location: {}",
-                decoder.seek(SeekFrom::Current(0)).unwrap()
-            );
+            continue;
         }
         index += 1;
 
@@ -150,9 +145,6 @@ pub fn read_table(decoder: &mut (impl SaveFile + Seek), fields: Vec<Field>) -> V
                 .map(|field| field.parse_from(decoder))
                 .collect(),
         );
-        if index == 702 || index == 703 {
-            println!("{:#?}", parsed_fields);
-        }
         parsed_items.push(parsed_fields);
     }
     parsed_items
@@ -168,9 +160,7 @@ pub fn read_sparse_table(decoder: &mut impl SaveFile, fields: Vec<Field>) -> Vec
         }
         size -= 1;
 
-        println!("Object length: {} bytes", size);
         index = decoder.read_gamma();
-        println!("Index: {}", index);
 
         let parsed_fields: TableItem = TableItem(
             fields

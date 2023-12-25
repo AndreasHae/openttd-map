@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io::prelude::*;
-use std::io::SeekFrom;
 
 use byteorder::{BigEndian, ReadBytesExt};
 
@@ -8,7 +7,6 @@ use crate::save_file::SaveFile;
 use crate::table_reader::{read_sparse_table, read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
-
 pub fn load_file(mut save_file: impl SaveFile + Seek) {
     let mut chunks: HashMap<String, Vec<TableItem>> = HashMap::new();
 
@@ -21,7 +19,7 @@ pub fn load_file(mut save_file: impl SaveFile + Seek) {
         }
 
         let chunk_id = chunk_id_from_bytes(&chunk_id);
-        println!("Loading chunk {}", chunk_id);
+        println!("Loading chunk {}: {}", chunk_id, chunk_name_of(chunk_id));
         let chunk_type = ChunkType::read_from(&mut save_file);
         println!("Chunk type: {:?}", chunk_type);
         println!("{}", save_file.debug_info());
@@ -35,15 +33,8 @@ pub fn load_file(mut save_file: impl SaveFile + Seek) {
             let fields = read_table_header(&mut save_file);
             // println!("Fields in header: {:#?}", fields);
 
-            if chunk_id == "ORDR" {
-                println!("Fields in header: {:#?}", fields);
-            }
-
             match chunk_type {
                 ChunkType::Table => {
-                    if chunk_id == "ORDR" {
-                        println!("{}", save_file.seek(SeekFrom::Current(0)).unwrap());
-                    }
                     let items = read_table(&mut save_file, fields);
                     chunks.insert(String::from(chunk_id), items);
                 }
