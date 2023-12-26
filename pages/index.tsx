@@ -6,29 +6,9 @@ import * as wasm from "../savegame-reader/pkg";
 import { SigmaContainer, useLoadGraph } from "@react-sigma/core";
 import Graph from "graphology";
 import "@react-sigma/core/lib/react-sigma.min.css";
+import { LinkGraph } from "../model/savefile-model";
+import { deserializeCoordinates, transposeCoordinates } from "../model/coordinates";
 
-interface LinkEdge {
-  capacity: number;
-  usage: number;
-  travel_time_sum: number;
-  last_unrestricted_update: number;
-  last_restricted_update: number;
-  next_edge: number;
-}
-
-interface LinkNode {
-  xy: number;
-  supply: number;
-  demand: number;
-  station: number;
-  last_update: number;
-  edges: LinkEdge[];
-}
-
-interface LinkGraph {
-  cargo: number;
-  nodes: LinkNode[];
-}
 const Home: NextPage = () => {
   const [file, setFile] = useState<File | undefined>();
   const [graph, setGraph] = useState<Graph | undefined>();
@@ -42,9 +22,12 @@ const Home: NextPage = () => {
 
     for (const nodes of passengerGraphs.map((graph) => graph.nodes)) {
       for (const node of nodes) {
-        const mapSizeX = 1024; // TODO read from savefile
-        const logMapX = Math.log2(mapSizeX);
-        graph.mergeNode(node.station, { x: node.xy & (mapSizeX - 1), y: node.xy >> logMapX });
+        // TODO read from savefile
+        const mapSizeX = 1024;
+        const mapSizeY = 1024;
+
+        const coords = deserializeCoordinates(node, mapSizeX);
+        graph.mergeNode(node.station, transposeCoordinates(mapSizeX, coords, mapSizeY));
 
         for (const edge of node.edges) {
           if (edge.next_edge === 65535) break;
