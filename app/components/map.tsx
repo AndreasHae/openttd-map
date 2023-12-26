@@ -16,9 +16,9 @@ const LoadGraph = ({ graph }: LoadGraphProps) => {
   return <></>;
 };
 
-export const TransitGraph = ({ graph }: LoadGraphProps) => {
+export const Map = ({ graph }: LoadGraphProps) => {
   return (
-    <SigmaContainer style={{ height: "500px", width: "500px" }}>
+    <SigmaContainer className="w-full h-full">
       <LoadGraph graph={graph} />
     </SigmaContainer>
   );

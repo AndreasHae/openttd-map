@@ -4,8 +4,7 @@ import { useState } from "react";
 import Graph from "graphology";
 import { LinkGraph } from "../model/savefile-model";
 import { deserializeCoordinates, transposeCoordinates } from "../model/coordinates";
-import { FilePicker } from "./file-picker";
-import { TransitGraph } from "./transit-graph";
+import { Map } from "./map";
 import dynamic from "next/dynamic";
 import { useDropzone } from "react-dropzone";
 
@@ -50,9 +49,9 @@ export const HomePage = dynamic(async () => {
       setGraph(graph);
     }
     return (
-      <main className="w-screen h-screen p-2">
+      <main className={"w-screen h-screen" + (graph ? "" : " p-2")}>
         {graph ? (
-          <TransitGraph graph={graph} />
+          <Map graph={graph} />
         ) : (
           <div
             {...getRootProps()}
