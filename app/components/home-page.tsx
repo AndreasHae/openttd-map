@@ -7,13 +7,19 @@ import { deserializeCoordinates, transposeCoordinates } from "../model/coordinat
 import { FilePicker } from "./file-picker";
 import { TransitGraph } from "./transit-graph";
 import dynamic from "next/dynamic";
+import { useDropzone } from "react-dropzone";
 
 export const HomePage = dynamic(async () => {
   const wasm = await import("../../savegame-reader/pkg");
 
   return () => {
-    const [file, setFile] = useState<File | undefined>();
     const [graph, setGraph] = useState<Graph | undefined>();
+
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+      onDropAccepted: async (droppedFiles) => {
+        await loadGraph(droppedFiles[0]);
+      },
+    });
 
     async function loadGraph(file: File): Promise<void> {
       const graph = new Graph({ type: "directed", multi: false, allowSelfLoops: false });
@@ -44,21 +50,24 @@ export const HomePage = dynamic(async () => {
       setGraph(graph);
     }
     return (
-      <main className="absolute inset-0 p-4 text-center bg-neutral-50 flex flex-col items-center justify-center">
-        <h1 className="text-7xl md:text-8xl font-semibold">Hey there!</h1>
-        <h2 className="text-3xl md:text-4xl mt-6">More coming soon 🚧👷🏻‍♂️</h2>
-        <FilePicker onFileChanged={setFile} />
-        <button
-          className="bg-red-300 p-1 border rounded mt-2"
-          onClick={async () => {
-            if (file) {
-              await loadGraph(file);
+      <main className="w-screen h-screen p-2">
+        {graph ? (
+          <TransitGraph graph={graph} />
+        ) : (
+          <div
+            {...getRootProps()}
+            className={
+              "w-full h-full border-2 border-dashed flex flex-col items-center justify-center gap-4 cursor-pointer" +
+              (isDragActive ? " border-blue-500" : "")
             }
-          }}
-        >
-          Do the thing
-        </button>
-        {graph && <TransitGraph graph={graph} />}
+          >
+            <h1 className="text-5xl font-bold">OpenTTD Map Visualizer</h1>
+            <p className="text-xl">
+              Drag and drop your <code>.sav</code> file here or click anywhere to select file
+            </p>
+            <input {...getInputProps()} />
+          </div>
+        )}
       </main>
     );
   };
