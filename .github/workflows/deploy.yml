@@ -37,6 +37,7 @@ jobs:
           args: wasm-pack
       - name: Compile Rust to Webassembly with wasm-pack
         run: wasm-pack build --debug
+        working-directory: savegame-reader
 
       # Build Next.js application
       - name: Setup Node
