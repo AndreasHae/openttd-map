@@ -40,11 +40,20 @@ const Home: NextPage = () => {
     const allGraphs: LinkGraph[] = JSON.parse(wasm.load_file(buf));
     const passengerGraphs = allGraphs.filter((graph) => graph.cargo === 0);
 
-    const nodes = passengerGraphs.flatMap((graph) => graph.nodes);
-    for (const node of nodes) {
-      const mapSizeX = 1024;
-      const logMapX = Math.log2(mapSizeX);
-      graph.addNode(node.station, { x: node.xy & (mapSizeX - 1), y: node.xy >> logMapX });
+    for (const nodes of passengerGraphs.map((graph) => graph.nodes)) {
+      for (const node of nodes) {
+        const mapSizeX = 1024; // TODO read from savefile
+        const logMapX = Math.log2(mapSizeX);
+        graph.mergeNode(node.station, { x: node.xy & (mapSizeX - 1), y: node.xy >> logMapX });
+
+        for (const edge of node.edges) {
+          if (edge.next_edge === 65535) break;
+
+          const destination = nodes[edge.next_edge];
+          graph.mergeNode(destination.station);
+          graph.addEdge(node.station, destination.station);
+        }
+      }
     }
 
     setGraph(graph);
@@ -70,7 +79,7 @@ const Home: NextPage = () => {
         >
           Do the thing
         </button>
-        <DisplayGraph graph={graph} />
+        {graph && <DisplayGraph graph={graph} />}
       </main>
     </>
   );

@@ -1,10 +1,12 @@
-use byteorder::ReadBytesExt;
+use std::fs::File;
 use std::io;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 
-use crate::common::has_bit;
+use byteorder::ReadBytesExt;
 #[cfg(feature = "liblzma")]
 use liblzma::read::XzDecoder;
+
+use crate::common::has_bit;
 
 pub trait SaveFile: Read {
     fn debug_info(&mut self) -> String;
@@ -70,6 +72,12 @@ impl<'a> CompressedSaveFile<'a> {
 
     pub fn debug_info(&mut self) -> String {
         String::from("No debug info available")
+    }
+
+    pub fn debug_save_decoded(&mut self, file: &mut File) {
+        let mut v = Vec::new();
+        self.reader.read_to_end(&mut v).unwrap();
+        file.write(v.as_slice()).unwrap();
     }
 }
 
