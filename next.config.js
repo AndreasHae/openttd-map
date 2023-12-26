@@ -4,7 +4,6 @@ const nextConfig = {
   transpilePackages: ["@react-sigma/core"],
   webpack: (config) => {
     config.experiments.asyncWebAssembly = true;
-    config.experiments.topLevelAwait = true;
     return config;
   },
 };
