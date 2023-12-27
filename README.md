@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://openttd-map.haessler.at/"><h1>🚂🗺 OpenTTD Map</h1></a>
+  <h1><a href="https://openttd-map.haessler.at/">🚂🗺 OpenTTD Map</a></h1>
   <p>
     <strong>View your OpenTTD map right in the browser!</strong>
   </p>
