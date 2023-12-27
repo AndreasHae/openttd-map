@@ -13,6 +13,6 @@
 
 ## About
 
-This project allows you to visualize your OpenTTD map in the browser. Drag-and-drop your `.sav` file
+This project allows you to visualize your <a href="https://github.com/OpenTTD/OpenTTD/">OpenTTD</a> map in the browser. Drag-and-drop your `.sav` file
 into [the website](https://openttd-map.haessler.at) and it shows the graph of all connections within your transport
 network. The file gets read locally within the browser so no data is ever sent to a server.
