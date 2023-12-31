@@ -23,7 +23,7 @@ jobs:
     container: ghcr.io/webassembly/wasi-sdk:wasi-sdk-20
     steps:
       - name: Install curl
-        run: apt update && apt install curl
+        run: apt update && apt install -y curl
 
       - name: Checkout
         uses: actions/checkout@v3
