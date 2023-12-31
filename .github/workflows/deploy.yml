@@ -20,6 +20,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: ghcr.io/webassembly/wasi-sdk:wasi-sdk-20
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -38,7 +39,7 @@ jobs:
           command: install
           args: wasm-pack
       - name: Compile Rust to Webassembly with wasm-pack
-        run: wasm-pack build --debug
+        run: wasm-pack build --debug -F liblzma
         working-directory: savegame-reader
 
       # Build Next.js application
