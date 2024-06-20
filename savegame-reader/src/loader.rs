@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use byteorder::{BigEndian, ReadBytesExt};
 
 use crate::save_file::SaveFile;
-use crate::table_reader::{read_sparse_table, read_table, read_table_header, Field, TableItem};
+use crate::table_reader::{Field, read_sparse_table, read_table, read_table_header, TableItem};
 
 #[allow(dead_code)]
 pub fn load_file(mut save_file: impl SaveFile) -> io::Result<HashMap<String, Vec<TableItem>>> {
@@ -177,7 +177,6 @@ mod tests {
     use std::fs::File;
 
     use crate::loader::load_file;
-    #[cfg(feature = "liblzma")]
     use crate::save_file::CompressedSaveFile;
     use crate::save_file::DebugSaveFile;
 
@@ -209,7 +208,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "liblzma")]
     fn test_load_valid_compressed_file() {
         let file = File::open("./test-big.sav").unwrap();
         let save_file = CompressedSaveFile::new(file);

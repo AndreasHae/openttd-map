@@ -3,7 +3,6 @@ use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 use byteorder::ReadBytesExt;
-#[cfg(feature = "liblzma")]
 use liblzma::read::XzDecoder;
 
 use crate::common::has_bit;
@@ -44,13 +43,11 @@ pub trait SaveFile: Read {
     }
 }
 
-#[cfg(feature = "liblzma")]
 pub struct CompressedSaveFile<'a> {
     pub version: u32,
     pub reader: Box<dyn Read + 'a>,
 }
 
-#[cfg(feature = "liblzma")]
 impl<'a> CompressedSaveFile<'a> {
     pub fn new<R: Read + 'a>(mut reader: R) -> CompressedSaveFile<'a> {
         let format = SaveFileFormat::read_from(&mut reader);
@@ -81,14 +78,12 @@ impl<'a> CompressedSaveFile<'a> {
     }
 }
 
-#[cfg(feature = "liblzma")]
 impl<'a> Read for CompressedSaveFile<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.reader.read(buf)
     }
 }
 
-#[cfg(feature = "liblzma")]
 impl<'a> SaveFile for CompressedSaveFile<'a> {
     fn debug_info(&mut self) -> String {
         String::from("No debug info available")

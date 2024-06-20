@@ -6,35 +6,34 @@
     "build": "next build",
     "start": "concurrently -k 'npm run start:next' 'npm run start:rust'",
     "start:next": "next dev",
-    "start:rust": "cd savegame-reader && chokidar src/**/*.rs -c 'wasm-pack build --debug' --initial --debounce",
+    "start:rust": "cd savegame-reader && chokidar src/**/*.rs -c 'wasm-pack build --debug --features liblzma' --initial --debounce",
     "lint": "next lint",
     "format": "prettier --ignore-path .gitignore --write ."
   },
   "dependencies": {
     "@fontsource/source-sans-pro": "5.0.8",
-    "@react-sigma/core": "3.4.2",
+    "@react-sigma/core": "4.0.2",
     "graphology": "0.25.4",
     "graphology-types": "0.24.7",
-    "lodash": "4.17.21",
-    "next": "14.0.4",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "next": "14.2.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-dropzone": "14.2.3",
-    "sigma": "2.4.0"
+    "sigma": "3.0.0-beta.20"
   },
   "devDependencies": {
-    "@types/node": "20.10.5",
-    "@types/react": "18.2.45",
-    "@types/react-dom": "18.2.18",
-    "autoprefixer": "10.4.16",
+    "@types/node": "20.14.6",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "autoprefixer": "10.4.19",
     "chokidar-cli": "3.0.0",
     "concurrently": "8.2.2",
-    "daisyui": "4.4.24",
-    "eslint": "8.56.0",
-    "eslint-config-next": "14.0.4",
-    "postcss": "8.4.32",
-    "prettier": "3.1.1",
-    "tailwindcss": "3.4.0",
-    "typescript": "5.3.3"
+    "daisyui": "4.12.2",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.4",
+    "postcss": "8.4.38",
+    "prettier": "3.3.2",
+    "tailwindcss": "3.4.4",
+    "typescript": "5.5.2"
   }
 }
