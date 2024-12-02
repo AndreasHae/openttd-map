@@ -37,9 +37,9 @@ export const HomePage = dynamic(async () => {
           graph.mergeNode(node.station, transposeCoordinates(mapSizeX, coords, mapSizeY));
 
           for (const edge of node.edges) {
-            if (edge.next_edge === 65535) break;
+            if ((edge.next_edge ?? edge.dest_node) === 65535) break;
 
-            const destination = nodes[edge.next_edge];
+            const destination = nodes[(edge.next_edge ?? edge.dest_node)];
             graph.mergeNode(destination.station);
             graph.addEdge(node.station, destination.station);
           }
