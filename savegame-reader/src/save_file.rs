@@ -1,9 +1,9 @@
 use std::fs::File;
 use std::io;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
 
 use byteorder::ReadBytesExt;
-use liblzma::read::XzDecoder;
+use lzma_rs::xz_decompress;
 
 use crate::common::has_bit;
 
@@ -56,8 +56,14 @@ impl<'a> CompressedSaveFile<'a> {
         reader.read_exact(&mut version).unwrap();
         let version = u32::from_be_bytes(version) >> 16;
 
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf).unwrap();
+
+        let mut decompressed_buf = Vec::new();
+        xz_decompress(&mut buf.as_slice(), &mut decompressed_buf).unwrap();
+
         let reader = match format {
-            SaveFileFormat::Lzma => XzDecoder::new(reader),
+            SaveFileFormat::Lzma => BufReader::new(Cursor::new(decompressed_buf)),
             format => panic!("Unsupported savegame format: {:?}", format),
         };
 

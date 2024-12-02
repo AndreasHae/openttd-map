@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "concurrently -k 'npm run start:next' 'npm run start:rust'",
     "start:next": "next dev",
-    "start:rust": "cd savegame-reader && chokidar src/**/*.rs -c 'wasm-pack build --debug --features liblzma' --initial --debounce",
+    "start:rust": "cd savegame-reader && chokidar src/**/*.rs -c 'wasm-pack build --debug' --initial --debounce",
     "lint": "next lint",
     "format": "prettier --ignore-path .gitignore --write ."
   },
