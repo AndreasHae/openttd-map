@@ -1,25 +1,24 @@
-import Graph from "graphology";
-import { SigmaContainer, useLoadGraph } from "@react-sigma/core";
-import { useEffect } from "react";
+"use client";
 
-interface LoadGraphProps {
-  graph: Graph;
-}
+import dynamic from "next/dynamic";
+import { LoadGraphProps } from "./loadGraph";
 
-const LoadGraph = ({ graph }: LoadGraphProps) => {
-  const loadGraph = useLoadGraph();
-
-  useEffect(() => {
-    loadGraph(graph);
-  }, [loadGraph, graph]);
-
-  return <></>;
-};
+const isBrowser = () => typeof window !== "undefined";
 
 export const Map = ({ graph }: LoadGraphProps) => {
-  return (
-    <SigmaContainer className="w-full h-full">
-      <LoadGraph graph={graph} />
-    </SigmaContainer>
-  );
+  if (isBrowser()) {
+    const SigmaContainer = dynamic(
+      import("@react-sigma/core").then((mod) => mod.SigmaContainer),
+      { ssr: false },
+    );
+    const LoadGraph = dynamic(
+      import("./loadGraph").then((mod) => mod.LoadGraph),
+      { ssr: false },
+    );
+    return (
+      <SigmaContainer>
+        <LoadGraph graph={graph} />
+      </SigmaContainer>
+    );
+  } else return <p>NOT AVAILABLE</p>;
 };
