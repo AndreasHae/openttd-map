@@ -7,11 +7,11 @@ import { deserializeCoordinates, transposeCoordinates } from "../model/coordinat
 import { Map } from "./map";
 import dynamic from "next/dynamic";
 import { useDropzone } from "react-dropzone";
+import init, { load_file } from "../../savegame-reader/pkg";
 
 export const HomePage = dynamic(
   async () => {
-    const wasm = await import("../../savegame-reader/pkg");
-
+    await init();
     return () => {
       const [graph, setGraph] = useState<Graph | undefined>();
 
@@ -25,7 +25,7 @@ export const HomePage = dynamic(
         const graph = new Graph({ type: "directed", multi: false, allowSelfLoops: false });
 
         const buf = new Uint8Array(await file.arrayBuffer());
-        const allGraphs: LinkGraph[] = JSON.parse(wasm.load_file(buf));
+        const allGraphs: LinkGraph[] = JSON.parse(load_file(buf));
         const passengerGraphs = allGraphs.filter((graph) => graph.cargo === 0);
 
         for (const nodes of passengerGraphs.map((graph) => graph.nodes)) {
